@@ -1,0 +1,106 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KP Trade</title>
+<style>
+:root{
+  --bg:#0B0F17;
+  --panel:#121826;
+  --line:rgba(255,255,255,.09);
+  --text:#E6EDF7;
+  --muted:#7E8CA3;
+  --blue:#4C9AFF;
+  --green:#22D39A;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  min-height:100vh;
+  background:
+    radial-gradient(900px 500px at 15% -10%,rgba(76,154,255,.12),transparent 60%),
+    radial-gradient(900px 500px at 85% 0%,rgba(34,211,154,.08),transparent 60%),
+    var(--bg);
+  color:var(--text);
+  font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.wrap{
+  width:min(1000px,calc(100% - 40px));
+}
+h1{
+  font-size:34px;
+  margin:0 0 8px;
+}
+h1 span{color:var(--blue)}
+p{
+  color:var(--muted);
+  margin:0 0 34px;
+}
+.grid{
+  display:grid;
+  grid-template-columns:repeat(2,1fr);
+  gap:18px;
+}
+.card{
+  display:block;
+  text-decoration:none;
+  color:inherit;
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:16px;
+  padding:28px;
+  transition:.18s;
+}
+.card:hover{
+  transform:translateY(-2px);
+  border-color:rgba(76,154,255,.5);
+}
+.card .type{
+  font-size:11px;
+  color:var(--muted);
+  text-transform:uppercase;
+  letter-spacing:1px;
+}
+.card h2{
+  margin:10px 0 8px;
+  font-size:22px;
+}
+.card p{
+  margin:0;
+  font-size:14px;
+  line-height:1.55;
+}
+.blue{border-left:3px solid var(--blue)}
+.green{border-left:3px solid var(--green)}
+@media(max-width:700px){
+  .grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>KP <span>Trade</span></h1>
+  <p>Market intelligence dashboards</p>
+
+  <div class="grid">
+
+    <a class="card blue" href="./sector-flow-radar/">
+      <div class="type">Capital Rotation</div>
+      <h2>Sector Flow Radar</h2>
+      <p>Track sector activity, relative volume, participation and capital rotation across crypto narratives.</p>
+    </a>
+
+    <a class="card green" href="./trend-confirmation-scanner/">
+      <div class="type">Trend Confirmation</div>
+      <h2>Trend Confirmation Scanner</h2>
+      <p>Scan Binance USDT perpetuals using DMI, RSI, OBV and Open Interest confirmation.</p>
+    </a>
+
+  </div>
+</div>
+</body>
+</html>

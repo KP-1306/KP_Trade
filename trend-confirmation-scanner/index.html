@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trend Confirmation Scanner — Binance USDT Perpetuals</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0B0E14; --panel:#121722; --panel-2:#171D2A; --line:rgba(255,255,255,.07); --line-2:rgba(255,255,255,.12);
+  --text:#E7EBF3; --muted:#8791A3; --dim:#5B6577;
+  --bull:#3DD68C; --bull-bg:rgba(61,214,140,.12); --bear:#F26D6D; --bear-bg:rgba(242,109,109,.12);
+  --neutral:#F5C451; --neutral-bg:rgba(245,196,81,.12); --accent:#7DA2FF; --accent-bg:rgba(125,162,255,.14);
+  --sans:'IBM Plex Sans',system-ui,-apple-system,Segoe UI,Roboto,sans-serif; --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;line-height:1.45}
+body{padding:22px 24px 40px;min-height:100vh}
+button,input,select{font-family:inherit;font-size:inherit;color:inherit}
+button{cursor:pointer}
+button:focus-visible,input:focus-visible,select:focus-visible,th:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* Header */
+.top{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:18px}
+.brand h1{font-size:20px;font-weight:600;letter-spacing:-.01em}
+.brand h1 span{color:var(--muted);font-weight:400}
+.brand p{color:var(--muted);font-size:13px;margin-top:3px}
+.status{display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);font-family:var(--mono)}
+.status .dot{width:8px;height:8px;border-radius:50%;background:var(--dim);display:inline-block;margin-right:6px;vertical-align:middle}
+.status .dot.live{background:var(--bull);box-shadow:0 0 0 3px var(--bull-bg)}
+.status .dot.busy{background:var(--neutral);animation:pulse 1s infinite}
+.status .dot.err{background:var(--bear)}
+@keyframes pulse{50%{opacity:.35}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* Summary cards */
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;cursor:pointer;transition:border-color .15s}
+.card:hover{border-color:var(--line-2)}
+.card.active{border-color:var(--accent)}
+.card .lbl{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.card .val{font-family:var(--mono);font-size:24px;font-weight:600;margin-top:4px;line-height:1.1}
+.card .sub{font-size:11.5px;color:var(--muted);margin-top:4px}
+.card.bull .val{color:var(--bull)} .card.bear .val{color:var(--bear)} .card.neu .val{color:var(--neutral)}
+
+/* Controls */
+.controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:12px}
+.seg{display:inline-flex;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:3px;gap:2px}
+.seg button{background:transparent;border:0;border-radius:6px;padding:6px 11px;color:var(--muted);font-family:var(--mono);font-size:12.5px}
+.seg button:hover{color:var(--text)}
+.seg button.on{background:var(--panel-2);color:var(--text);box-shadow:inset 0 0 0 1px var(--line-2)}
+.controls input[type=search],.controls select,.controls input[type=number]{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;color:var(--text);min-width:0}
+.controls input[type=search]{width:190px}
+.controls input[type=number]{width:64px;font-family:var(--mono)}
+.controls select{max-width:180px}
+.controls.row2{margin-top:-4px}
+.lbl-inline{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:2px}
+.metric-filters{display:none;flex-wrap:wrap;gap:8px 18px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:12px}
+.metric-filters.open{display:flex}
+.mf{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted)}
+.mf .seg button{padding:4px 9px}
+.mf .seg button.on.yes{color:var(--bull);background:var(--bull-bg);box-shadow:none}
+.mf .seg button.on.no{color:var(--bear);background:var(--bear-bg);box-shadow:none}
+.badge{display:inline-block;min-width:16px;padding:0 5px;border-radius:9px;background:var(--accent);color:#0B0E14;font-family:var(--mono);font-size:10.5px;font-weight:600;margin-left:6px;vertical-align:1px}
+.mcap{color:var(--muted)}
+.controls select option{background:#121722}
+.chk{display:inline-flex;align-items:center;gap:6px;color:var(--muted);font-size:12.5px;white-space:nowrap}
+.chk input{accent-color:var(--accent)}
+.spacer{flex:1}
+.btn{background:var(--panel-2);border:1px solid var(--line-2);border-radius:8px;padding:8px 14px;font-weight:500;transition:background .15s}
+.btn:hover{background:#1E2534}
+.btn.primary{background:var(--accent-bg);border-color:rgba(125,162,255,.35);color:#C7D6FF}
+.btn.primary:hover{background:rgba(125,162,255,.22)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.progress{height:3px;background:var(--line);border-radius:2px;overflow:hidden;margin:-4px 0 10px;opacity:0;transition:opacity .2s}
+.progress.show{opacity:1}
+.progress i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent),var(--bull));transition:width .2s}
+
+/* Table */
+.wrap{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.scroll{overflow:auto;max-height:calc(100vh - 300px)}
+table{width:100%;border-collapse:separate;border-spacing:0;font-size:13px}
+thead th{position:sticky;top:0;z-index:2;background:#151B27;border-bottom:1px solid var(--line-2);color:var(--muted);font-weight:500;font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;padding:10px 10px;text-align:left;white-space:nowrap;cursor:pointer;user-select:none}
+thead th:hover{color:var(--text)}
+thead th.num,td.num{text-align:right;font-family:var(--mono)}
+thead th.ctr,td.ctr{text-align:center}
+thead th .arr{opacity:.35;font-size:10px;margin-left:4px}
+thead th.sorted{color:var(--text)} thead th.sorted .arr{opacity:1;color:var(--accent)}
+tbody td{padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap;vertical-align:middle}
+tbody tr:hover td{background:rgba(255,255,255,.025)}
+tbody tr:last-child td{border-bottom:0}
+td.sym{font-family:var(--mono);font-weight:600}
+td.sym small{display:block;color:var(--dim);font-weight:400;font-size:10.5px;letter-spacing:.02em}
+.tag{display:inline-block;font-size:10.5px;color:var(--muted);background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:1px 6px;margin-right:3px}
+.pill{display:inline-block;min-width:44px;text-align:center;font-family:var(--mono);font-size:11.5px;font-weight:600;padding:3px 8px;border-radius:6px;letter-spacing:.02em}
+.pill.yes{color:var(--bull);background:var(--bull-bg)} .pill.no{color:var(--bear);background:var(--bear-bg)} .pill.na{color:var(--neutral);background:var(--neutral-bg)}
+.pos{color:var(--bull)} .neg{color:var(--bear)} .flat{color:var(--muted)}
+.rsi{font-family:var(--mono);color:var(--muted)}
+.rsi b{color:var(--text);font-weight:500}
+/* Alignment meter — the signature cell */
+.align{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11.5px}
+.meter{display:inline-flex;gap:2px}
+.meter i{width:9px;height:14px;border-radius:2px;background:var(--line-2)}
+.meter.b i.f{background:var(--bull)} .meter.s i.f{background:var(--bear)}
+.align .n{color:var(--muted);min-width:22px}
+.align .n.hot-b{color:var(--bull);font-weight:600} .align .n.hot-s{color:var(--bear);font-weight:600}
+tr.full-bull td.sym{box-shadow:inset 3px 0 0 var(--bull)} tr.full-bear td.sym{box-shadow:inset 3px 0 0 var(--bear)}
+.empty{padding:40px;text-align:center;color:var(--muted)}
+.empty b{color:var(--text)}
+.foot{display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;padding:10px 12px;border-top:1px solid var(--line);font-size:11.5px;color:var(--muted)}
+.foot code{font-family:var(--mono);color:var(--dim)}
+.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#1A2130;border:1px solid var(--line-2);border-radius:8px;padding:10px 14px;font-size:12.5px;color:var(--text);box-shadow:0 10px 30px rgba(0,0,0,.4);opacity:0;pointer-events:none;transition:opacity .2s;max-width:90vw}
+.toast.show{opacity:1}
+.toast.err{border-color:rgba(242,109,109,.4)}
+@media (max-width:760px){body{padding:14px}.controls input[type=search]{width:100%}.scroll{max-height:none}}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="brand">
+    <h1>Trend Confirmation Scanner <span>· Binance USDT Perpetuals</span></h1>
+    <p>DMI · RSI vs EMA · OBV vs EMA50 · Open Interest — one row per pair, aligned setups float to the top.</p>
+  </div>
+  <div class="status">
+    <span><i class="dot" id="dot"></i><span id="statusText">Idle</span></span>
+    <span id="lastUpdated">Last updated: —</span>
+    <span id="reqCount"></span>
+  </div>
+</div>
+
+<div class="cards">
+  <div class="card" data-filter="all"><div class="lbl">Pairs scanned</div><div class="val" id="cScanned">0</div><div class="sub" id="cScannedSub">of 0 perpetuals</div></div>
+  <div class="card bull" data-filter="bull"><div class="lbl">Bullish aligned</div><div class="val" id="cBull">0</div><div class="sub">4–5 of 5 bull checks</div></div>
+  <div class="card bear" data-filter="bear"><div class="lbl">Bearish aligned</div><div class="val" id="cBear">0</div><div class="sub">4–5 of 5 bear checks</div></div>
+  <div class="card neu" data-filter="oi"><div class="lbl">OI rising</div><div class="val" id="cOI">0</div><div class="sub">threshold met on last candles</div></div>
+  <div class="card" data-filter="err"><div class="lbl">Incomplete</div><div class="val" id="cErr">0</div><div class="sub">missing data / new listing</div></div>
+</div>
+
+<div class="controls">
+  <div class="seg" id="tfSeg">
+    <button data-tf="5m">5m</button><button data-tf="15m">15m</button><button data-tf="1h" class="on">1H</button><button data-tf="4h">4H</button><button data-tf="1d">1D</button>
+  </div>
+  <input type="search" id="search" placeholder="Search coin (e.g. SOL, PEPE)" autocomplete="off">
+  <select id="sector"><option value="">All sectors</option></select>
+  <label class="chk" title="Cumulative OI increase over the checked candles required for Yes">OI ≥ <input type="number" id="oiThr" value="3" min="0" step="0.5"> %</label>
+  <label class="chk" title="How many completed candles must show consecutive OI increases">over <select id="oiN" style="max-width:70px"><option value="2">2</option><option value="3" selected>3</option></select> candles</label>
+  <label class="chk"><input type="checkbox" id="closedOnly" checked> Closed candles only</label>
+  <span class="spacer"></span>
+  <button class="btn" id="exportBtn">Export CSV</button>
+  <button class="btn primary" id="refreshBtn">Scan</button>
+</div>
+<div class="controls row2">
+  <span class="lbl-inline">Show</span>
+  <div class="seg" id="biasSeg">
+    <button data-bias="all" class="on">All</button><button data-bias="bull">Bullish only</button><button data-bias="bear">Bearish only</button>
+  </div>
+  <span class="lbl-inline">Universe</span>
+  <select id="topN" title="Rank by 24h quote volume on Binance Futures">
+    <option value="0">All perpetuals</option><option value="50">Top 50 by volume</option><option value="100">Top 100 by volume</option><option value="200">Top 200 by volume</option>
+  </select>
+  <select id="mcapMin" title="Market cap from CoinGecko, matched by ticker">
+    <option value="0">Any market cap</option><option value="50">MCap ≥ $50M</option><option value="100">MCap ≥ $100M</option><option value="500">MCap ≥ $500M</option><option value="1000">MCap ≥ $1B</option>
+  </select>
+  <span class="spacer"></span>
+  <button class="btn" id="mfToggle">Metric filters<span class="badge" id="mfCount" style="display:none">0</span></button>
+</div>
+<div class="metric-filters" id="mfPanel">
+  <span class="lbl-inline">Require</span>
+  <div class="mf" data-m="dmi"><span>DMI</span><div class="seg"><button data-v="any" class="on">Any</button><button data-v="yes">Yes</button><button data-v="no">No</button></div></div>
+  <div class="mf" data-m="rsiAboveEma"><span>RSI &gt; EMA</span><div class="seg"><button data-v="any" class="on">Any</button><button data-v="yes">Yes</button><button data-v="no">No</button></div></div>
+  <div class="mf" data-m="rsiAbove50"><span>RSI &gt; 50</span><div class="seg"><button data-v="any" class="on">Any</button><button data-v="yes">Yes</button><button data-v="no">No</button></div></div>
+  <div class="mf" data-m="obvAboveEma"><span>OBV &gt; EMA50</span><div class="seg"><button data-v="any" class="on">Any</button><button data-v="yes">Yes</button><button data-v="no">No</button></div></div>
+  <div class="mf" data-m="oiRising"><span>OI Rising</span><div class="seg"><button data-v="any" class="on">Any</button><button data-v="yes">Yes</button><button data-v="no">No</button></div></div>
+  <span class="spacer"></span>
+  <button class="btn" id="mfReset">Clear</button>
+</div>
+<div class="progress" id="progress"><i id="progressBar"></i></div>
+
+<div class="wrap">
+  <div class="scroll">
+    <table id="tbl">
+      <thead>
+        <tr>
+          <th data-k="symbol">Pair<span class="arr">↕</span></th>
+          <th data-k="sector">Sector<span class="arr">↕</span></th>
+          <th class="num" data-k="price">Price<span class="arr">↕</span></th>
+          <th class="num" data-k="chg">24h<span class="arr">↕</span></th>
+          <th class="num" data-k="mcap" title="CoinGecko market cap (loaded when a market-cap filter is used, or on demand)">MCap<span class="arr">↕</span></th>
+          <th class="ctr" data-k="dmi" title="YES = +DI > −DI and +DI > ADX (bullish) · NO = −DI > +DI and −DI > ADX (bearish) · FLAT = neither">DMI<span class="arr">↕</span></th>
+          <th class="ctr" data-k="rsiAboveEma">RSI > EMA<span class="arr">↕</span></th>
+          <th class="ctr" data-k="rsiAbove50">RSI > 50<span class="arr">↕</span></th>
+          <th class="ctr" data-k="obvAboveEma" title="OBV above its 50-period EMA">OBV > EMA50<span class="arr">↕</span></th>
+          <th class="ctr" data-k="oiRising" title="Consecutive OI increases over the last N completed candles, cumulative ≥ threshold">OI Rising<span class="arr">↕</span></th>
+          <th class="num" data-k="oiChg" title="Cumulative OI change over the checked candles">OI Δ<span class="arr">↕</span></th>
+          <th data-k="bullScore" title="Bull checks: DMI Bull, RSI>EMA, RSI>50, OBV>EMA50, OI rising">Bull<span class="arr">↕</span></th>
+          <th data-k="bearScore" title="Bear checks: DMI Bear, RSI<EMA, RSI<50, OBV<EMA50, OI rising">Bear<span class="arr">↕</span></th>
+        </tr>
+      </thead>
+      <tbody id="tbody"><tr><td colspan="13" class="empty">Press <b>Scan</b> to load every Binance USDT perpetual and evaluate the confirmation checks.</td></tr></tbody>
+    </table>
+  </div>
+  <div class="foot">
+    <span id="rowInfo">0 rows</span>
+    <span>Data: <code>fapi.binance.com</code> · klines cached and topped up incrementally · OI from <code>openInterestHist</code></span>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================
+   SECTOR MAP  (base asset → tags). Perp prefixes like 1000/1M are stripped for lookup.
+   ============================================================ */
+const SECTOR_RAW = `0G:AI,L1//L2,SEED;1000CAT:BNB Chain,LAUNCHPOOL,MEME,SEED;1000CHEEMS:BNB Chain,MEME,SEED;1000SATS:MEME,SEED;1INCH:DEFI;1MBABYDOGE:MEME,SEED;2Z:INFRASTRUCTURE,SEED;A2Z:GAMING,LAUNCHPAD;AAVE:DEFI;ACA:DEFI,L1//L2,POLKADOT;ACE:GAMING,LAUNCHPOOL,SEED;ACH:PAYMENTS;ACM:FAN TOKENS;ACX:DEFI,SEED;ACT:AI,MEME,SEED;ADA:L1//L2;ADX:AI,INFRASTRUCTURE;AEVO:DEFI,L1//L2,LAUNCHPOOL,SEED;AGLD:GAMING,NFT,SEED;AI:AI,GAMING,LAUNCHPOOL,SEED,YZI;AIXBT:AI,MEME,SEED;ALCX:DEFI;ALGO:L1//L2;ALICE:GAMING,LAUNCHPOOL,METAVERSE,NFT,SEED,YZI;ALPINE:FAN TOKENS,LAUNCHPAD;ALT:INFRASTRUCTURE,LAUNCHPOOL,SEED;AMP:DEFI;ANIME:LAUNCHPOOL,NFT,SEED;ANKR:DEFI,LIQUID STAKING,POW;APE:NFT;API3:INFRASTRUCTURE;APT:L1//L2,YZI;ARB:L1//L2;ARDR:L1//L2;ARKM:INFRASTRUCTURE,LAUNCHPAD,YZI;ARK:L1//L2;ARPA:INFRASTRUCTURE,L1//L2;AR:STORAGE;ASR:BNB Chain,FAN TOKENS,LAUNCHPOOL;ASTER:BNB Chain,DEFI,SEED;ASTR:INFRASTRUCTURE,L1//L2,POLKADOT;ATA:INFRASTRUCTURE,LAUNCHPOOL,POLKADOT,SEED;ATM:BNB Chain,FAN TOKENS,LAUNCHPOOL;ATOM:L1//L2;AUCTION:DEFI,SEED;AUDIO:NFT;A:L1//L2;AVAX:L1//L2,RWA;AVNT:DEFI,SEED;AWE:AI;AXL:INFRASTRUCTURE,L1//L2,SEED,YZI;AXS:GAMING,LAUNCHPAD,METAVERSE,NFT,YZI;BABY:L1//L2,SEED,YZI;BANANA:DEFI,LAUNCHPOOL,SEED;BANANAS31:BNB Chain,MEME,SEED;BAND:DEFI,INFRASTRUCTURE,LAUNCHPAD;BARD:DEFI,SEED;BAR:FAN TOKENS,SEED;BAT:INFRASTRUCTURE;BB:L1//L2,MEGADROP,RWA,SEED;BCH:PAYMENTS,POW;BEAMX:GAMING,LAUNCHPOOL,YZI;BEL:BNB Chain,DEFI,LAUNCHPOOL,SEED;BERA:L1//L2,LAUNCHPOOL;BICO:INFRASTRUCTURE;BIFI:BNB Chain,DEFI,SEED;BIGTIME:GAMING,SEED;BIO:LAUNCHPOOL,YZI;BLUR:NFT;BMT:BNB Chain,INFRASTRUCTURE,LAUNCHPOOL,SEED;BNB:BNB Chain,L1//L2;BNT:DEFI;BOME:MEME,SEED,Solana;BONK:MEME,Solana;BROCCOLI714:BNB Chain,MEME,SEED;BTC:PAYMENTS,POW;BTTC:LAUNCHPAD,STORAGE;C98:BNB Chain,DEFI,LAUNCHPAD;CAKE:BNB Chain,DEFI;CATI:GAMING,LAUNCHPOOL,SEED,YZI;CELO:DEFI,L1//L2;CELR:L1//L2,LAUNCHPAD;CETUS:DEFI,SEED;CFX:L1//L2,POW;CGPT:AI,BNB Chain,INFRASTRUCTURE,SEED;CHESS:DEFI,LIQUID STAKING,SEED,YZI;CHR:AI,L1//L2,NFT,RWA;CHZ:FAN TOKENS,L1//L2,NFT;CITY:FAN TOKENS,LAUNCHPOOL;CKB:L1//L2,POW;COMP:DEFI;COOKIE:AI,BNB Chain,SEED;COTI:PAYMENTS;COW:DEFI,SEED;CRV:DEFI;CTK:BNB Chain,INFRASTRUCTURE,LAUNCHPOOL,YZI;CTSI:L1//L2,LAUNCHPAD;C:INFRASTRUCTURE,SEED;CVC:INFRASTRUCTURE;CVX:DEFI;CYBER:INFRASTRUCTURE,LAUNCHPOOL,SEED,YZI;DASH:POW;DATA:INFRASTRUCTURE;DCR:L1//L2,POW;DEGO:BNB Chain,DEFI,LAUNCHPAD,NFT,SEED;DENT:INFRASTRUCTURE;DEXE:DEFI,SEED;DF:DEFI,SEED;DGB:POW;DIA:DEFI,INFRASTRUCTURE;DODO:BNB Chain,DEFI,LAUNCHPOOL,SEED;DOGE:MEME,POW;DOGS:LAUNCHPOOL,MEME,SEED;DOLO:DEFI,SEED;DOT:L1//L2,POLKADOT;D:BNB Chain,GAMING,LAUNCHPOOL,METAVERSE,NFT,YZI;DUSK:INFRASTRUCTURE,RWA;DYDX:DEFI;DYM:INFRASTRUCTURE,L1//L2,SEED;EDEN:RWA,SEED;EDU:LAUNCHPAD;EGLD:L1//L2,LAUNCHPAD;EIGEN:DEFI,INFRASTRUCTURE;ENA:DEFI,LAUNCHPOOL,YZI;ENJ:GAMING,L1//L2,NFT;ENSO:INFRASTRUCTURE,SEED;ENS:INFRASTRUCTURE;EPIC:L1//L2,RWA,SEED;ERA:INFRASTRUCTURE,SEED;ETC:L1//L2,POW;ETHFI:DEFI,LAUNCHPOOL;ETH:L1//L2;EUL:DEFI,SEED;FARM:DEFI;FET:AI,INFRASTRUCTURE,LAUNCHPAD;FF:DEFI,SEED;FIDA:INFRASTRUCTURE,Solana;FIL:STORAGE;FIO:INFRASTRUCTURE,NFT;FIS:DEFI,LIQUID STAKING,SEED;FLM:DEFI,LAUNCHPOOL,SEED;FLOKI:BNB Chain,GAMING,MEME,METAVERSE,SEED;FLOW:L1//L2;FLUX:AI,INFRASTRUCTURE,L1//L2,POW;FORM:BNB Chain,LAUNCHPAD,SEED;FORTH:DEFI;F:DEFI,SEED;FXS:DEFI,LIQUID STAKING;GALA:BNB Chain,GAMING,NFT,YZI;GHST:DEFI,GAMING,METAVERSE,NFT,SEED;GIGGLE:BNB Chain,MEME,SEED;GLMR:L1//L2,POLKADOT;GLM:INFRASTRUCTURE;GMT:LAUNCHPAD,NFT,Solana,YZI;GMX:DEFI;GNO:L1//L2;GNS:DEFI,SEED;GPS:INFRASTRUCTURE,SEED,YZI;GRT:AI,INFRASTRUCTURE;GTC:INFRASTRUCTURE;GUN:GAMING,L1//L2,LAUNCHPOOL,SEED;G:INFRASTRUCTURE,SEED;HAEDAL:LAUNCHPOOL,LIQUID STAKING,SEED;HBAR:L1//L2;HEI:DEFI,INFRASTRUCTURE,LAUNCHPOOL,SEED;HEMI:L1//L2,SEED;HFT:DEFI,LAUNCHPOOL,SEED,YZI;HIGH:LAUNCHPOOL,METAVERSE,NFT,YZI;HIVE:L1//L2;HMSTR:GAMING,LAUNCHPOOL,SEED;HOLO:AI,SEED;HOME:DEFI,LAUNCHPOOL,SEED;HOOK:BNB Chain,INFRASTRUCTURE,LAUNCHPAD,SEED,YZI;HOT:L1//L2,STORAGE;HUMA:LAUNCHPOOL,PAYMENTS,SEED;HYPER:INFRASTRUCTURE,LAUNCHPOOL,SEED;ICP:L1//L2,RWA;ICX:L1//L2;IDEX:DEFI;ID:BNB Chain,INFRASTRUCTURE,LAUNCHPAD,SEED,YZI;ILV:GAMING,METAVERSE;IMX:GAMING,L1//L2,NFT;INIT:L1//L2,LAUNCHPOOL,SEED,YZI;INJ:AI,BNB Chain,DEFI,L1//L2,LAUNCHPAD,RWA,YZI;IOST:L1//L2;IOTA:L1//L2,POW;IOTX:INFRASTRUCTURE,L1//L2;IO:AI,INFRASTRUCTURE,LAUNCHPOOL,SEED,Solana;IQ:AI;JASMY:INFRASTRUCTURE;JOE:DEFI;JST:DEFI;JTO:DEFI,Solana;JUP:DEFI,Solana;JUV:BNB Chain,FAN TOKENS,LAUNCHPOOL;KAIA:DEFI,L1//L2,LAUNCHPOOL;KAITO:AI,INFRASTRUCTURE,LAUNCHPOOL,SEED;KAVA:DEFI,L1//L2,LAUNCHPAD;KDA:L1//L2,POW;KERNEL:BNB Chain,DEFI,MEGADROP,SEED,YZI;KMNO:DEFI,SEED;KNC:DEFI;KSM:L1//L2,POLKADOT;LA:INFRASTRUCTURE,SEED;LAYER:DEFI,INFRASTRUCTURE,LAUNCHPOOL,SEED,Solana,YZI;LAZIO:FAN TOKENS,LAUNCHPAD;LDO:DEFI,LIQUID STAKING;LINEA:L1//L2,LAUNCHPOOL,SEED;LINK:INFRASTRUCTURE;LISTA:BNB Chain,DEFI,LIQUID STAKING,MEGADROP,SEED;LIT:INFRASTRUCTURE;LPT:AI,INFRASTRUCTURE;LQTY:DEFI,SEED;LRC:DEFI;LSK:L1//L2;LTC:PAYMENTS,POW;LUMIA:DEFI,L1//L2,RWA;LUNA:DEFI,L1//L2;LUNC:DEFI,L1//L2;MAGIC:GAMING,METAVERSE,NFT,SEED;MANA:GAMING,METAVERSE,NFT;MANTA:L1//L2,LAUNCHPOOL,SEED;MASK:INFRASTRUCTURE;MAV:DEFI,INFRASTRUCTURE,LAUNCHPOOL;MBL:GAMING,NFT;MBOX:BNB Chain,DEFI,GAMING,LAUNCHPOOL,METAVERSE,NFT,YZI;MDT:AI,INFRASTRUCTURE;ME:NFT,SEED,Solana;MEME:LAUNCHPOOL,MEME,SEED;METIS:L1//L2,SEED;MINA:L1//L2;MIRA:AI,SEED;MITO:DEFI,SEED;MLN:DEFI;MORPHO:DEFI,SEED;MOVE:L1//L2,LAUNCHPOOL,SEED,YZI;MOVR:L1//L2;MTL:INFRASTRUCTURE;MUBARAK:BNB Chain,MEME,SEED;NEAR:L1//L2;NEIRO:MEME,SEED;NEO:L1//L2;NEWT:AI,LAUNCHPOOL,SEED;NFP:AI,LAUNCHPOOL,NFT,SEED,YZI;NIL:AI,L1//L2,LAUNCHPOOL,SEED;NKN:INFRASTRUCTURE,POW;NMR:AI,DEFI;NOM:L1//L2,SEED;NOT:GAMING,LAUNCHPOOL,SEED;NTRN:L1//L2,SEED;NXPC:GAMING,L1//L2,LAUNCHPOOL,SEED;OGN:DEFI,LIQUID STAKING;OG:BNB Chain,FAN TOKENS,LAUNCHPOOL,SEED;OM:L1//L2,RWA,SEED;ONE:L1//L2,LAUNCHPAD;ONDO:INFRASTRUCTURE,RWA,SEED;ONT:BNB Chain,L1//L2,POW;OPEN:AI,L1//L2,SEED;OP:L1//L2,YZI;ORCA:DEFI,SEED,Solana;ORDI:MEME,SEED;OSMO:DEFI,L1//L2;OXT:INFRASTRUCTURE;PARTI:INFRASTRUCTURE,L1//L2,LAUNCHPOOL,SEED,YZI;PENDLE:DEFI,LAUNCHPOOL,RWA,YZI;PENGU:LAUNCHPOOL,MEME,NFT,Solana;PEOPLE:MEME,SEED;PEPE:MEME;PERP:DEFI,SEED;PHA:AI,INFRASTRUCTURE,POLKADOT,SEED;PHB:AI,L1//L2;PIXEL:GAMING,LAUNCHPOOL,SEED;PLUME:INFRASTRUCTURE,L1//L2,RWA;PNUT:MEME,SEED,Solana;POL:L1//L2,LAUNCHPAD,YZI;POLYX:INFRASTRUCTURE,L1//L2,RWA;POND:AI,INFRASTRUCTURE,SEED;PORTAL:GAMING,LAUNCHPOOL,SEED;PORTO:FAN TOKENS,LAUNCHPAD;PROM:NFT,SEED;PROVE:INFRASTRUCTURE,SEED;PSG:BNB Chain,FAN TOKENS,LAUNCHPOOL,SEED,YZI;PUNDIX:PAYMENTS;PUMP:SEED;PYR:GAMING,METAVERSE,NFT;PYTH:INFRASTRUCTURE,Solana,YZI;QI:DEFI,LAUNCHPOOL,LIQUID STAKING;QKC:L1//L2,POW;QNT:INFRASTRUCTURE;QTUM:L1//L2;QUICK:DEFI;RAD:INFRASTRUCTURE;RARE:NFT;RAY:DEFI,Solana;RDNT:DEFI,LAUNCHPOOL,SEED;RED:INFRASTRUCTURE,LAUNCHPOOL,SEED;REI:L1//L2;RENDER:INFRASTRUCTURE,Solana;RESOLV:DEFI,LAUNCHPOOL,SEED;REZ:DEFI,LAUNCHPOOL,SEED,YZI;RIF:DEFI,L1//L2,POW,STORAGE;RLC:AI,INFRASTRUCTURE;RONIN:GAMING,L1//L2,SEED;ROSE:L1//L2;RPL:DEFI,LIQUID STAKING,SEED;RSR:DEFI,RWA;RUNE:DEFI;RVN:POW;SAGA:L1//L2,LAUNCHPOOL,SEED;SAHARA:AI,SEED,YZI;SAND:GAMING,LAUNCHPAD,METAVERSE,NFT;SANTOS:FAN TOKENS,LAUNCHPOOL;SCRT:L1//L2;SCR:L1//L2,LAUNCHPOOL,SEED;SC:POW,STORAGE;SEI:L1//L2,LAUNCHPOOL,YZI;SFP:BNB Chain,INFRASTRUCTURE,LAUNCHPAD,YZI;SHELL:AI,BNB Chain,LAUNCHPOOL,SEED,YZI;SHIB:MEME;SIGN:INFRASTRUCTURE,LAUNCHPOOL,SEED,YZI;SKL:L1//L2;SKY:DEFI,RWA;SLP:GAMING,METAVERSE,NFT,SEED;SNX:DEFI,RWA;SOL:L1//L2;SOLV:BNB Chain,DEFI,MEGADROP,SEED,YZI;SOMI:L1//L2,SEED;SOPH:L1//L2,LAUNCHPOOL,SEED,YZI;SPELL:DEFI;SPK:DEFI,LAUNCHPOOL,SEED;SSV:INFRASTRUCTURE;STG:DEFI,SEED;STO:DEFI,LAUNCHPOOL,SEED,YZI;STORJ:STORAGE;STRAX:L1//L2;STRK:L1//L2;STX:L1//L2,POW,STORAGE;SUI:L1//L2,LAUNCHPOOL,YZI;SUN:DEFI,SEED;SUPER:DEFI,NFT,SEED;S:L1//L2;SUSHI:DEFI;SYN:DEFI,SEED;SYS:L1//L2,POW;SXP:L1//L2;SXT:INFRASTRUCTURE,L1//L2,LAUNCHPOOL,SEED;SYRUP:DEFI,RWA,SEED;TAO:AI,L1//L2;THE:BNB Chain,DEFI,LAUNCHPOOL,SEED,YZI;THETA:AI,INFRASTRUCTURE,L1//L2;TIA:INFRASTRUCTURE,YZI;TKO:LAUNCHPAD;TLM:BNB Chain,GAMING,LAUNCHPOOL,METAVERSE;TNSR:NFT,SEED,Solana;TON:L1//L2,LAUNCHPOOL;TOWNS:SEED;TRB:DEFI,INFRASTRUCTURE,POW,YZI;TREE:DEFI,SEED;TRU:DEFI,RWA,SEED;TRUMP:MEME,SEED;TRX:L1//L2;TST:BNB Chain,MEME,SEED;T:INFRASTRUCTURE;TUT:BNB Chain,MEME,SEED;TURBO:AI,MEME,SEED;TURTLE:DEFI,SEED;TWT:BNB Chain,INFRASTRUCTURE;UMA:DEFI;UNI:DEFI;USUAL:DEFI,LAUNCHPOOL,RWA,SEED;USTC:DEFI;UTK:PAYMENTS;VANA:AI,L1//L2,LAUNCHPOOL,SEED,YZI;VANRY:AI,L1//L2,SEED;VELODROME:DEFI,SEED;VET:L1//L2,RWA;VIC:L1//L2;VIRTUAL:AI,SEED;VOXEL:GAMING,LAUNCHPAD,YZI;WAL:SEED,STORAGE;WAN:L1//L2;WAXP:DEFI,GAMING,L1//L2,NFT;WBETH:LIQUID STAKING;WCT:INFRASTRUCTURE,LAUNCHPOOL,SEED;WIF:MEME,SEED,Solana;WIN:INFRASTRUCTURE;WLD:AI,INFRASTRUCTURE;WLFI:DEFI,SEED;WOO:DEFI,YZI;W:INFRASTRUCTURE,Solana;XAI:GAMING,LAUNCHPOOL,SEED;XLM:L1//L2;XNO:PAYMENTS;XPL:SEED;XRP:L1//L2,PAYMENTS;XTZ:L1//L2;XVG:POW;XVS:BNB Chain,DEFI,LAUNCHPOOL;YB:DEFI,SEED;YFI:DEFI;YGG:GAMING;ZBT:DEFI,SEED;ZEC:POW;ZEN:POW;ZIL:L1//L2,POW;ZKC:INFRASTRUCTURE,SEED;ZK:INFRASTRUCTURE,L1//L2,YZI;ZRO:INFRASTRUCTURE,YZI;ZRX:DEFI`;
+const SECTORS = {};
+SECTOR_RAW.split(';').forEach(e=>{const i=e.indexOf(':');SECTORS[e.slice(0,i)]=e.slice(i+1).split(',').map(s=>s.trim());});
+function sectorsFor(symbol){
+  const base = symbol.replace(/USDT$/,'');
+  const cands = [base, base.replace(/^1000000/,''), base.replace(/^1000/,''), base.replace(/^1M/,'')];
+  for(const c of cands){ if(SECTORS[c]) return SECTORS[c]; }
+  return [];
+}
+
+/* ============================================================
+   INDICATORS  (pure functions over arrays)
+   ============================================================ */
+function ema(values, period){
+  const out = new Array(values.length).fill(null);
+  if(values.length < period) return out;
+  let sum=0; for(let i=0;i<period;i++) sum+=values[i];
+  let prev = sum/period; out[period-1]=prev;
+  const k = 2/(period+1);
+  for(let i=period;i<values.length;i++){ prev = values[i]*k + prev*(1-k); out[i]=prev; }
+  return out;
+}
+function rsi(closes, period=14){
+  const out = new Array(closes.length).fill(null);
+  if(closes.length <= period) return out;
+  let g=0,l=0;
+  for(let i=1;i<=period;i++){ const d=closes[i]-closes[i-1]; if(d>0) g+=d; else l-=d; }
+  let ag=g/period, al=l/period;
+  out[period] = al===0 ? 100 : 100 - 100/(1+ag/al);
+  for(let i=period+1;i<closes.length;i++){
+    const d=closes[i]-closes[i-1];
+    ag=(ag*(period-1)+(d>0?d:0))/period; al=(al*(period-1)+(d<0?-d:0))/period;
+    out[i] = al===0 ? 100 : 100 - 100/(1+ag/al);
+  }
+  return out;
+}
+/* Wilder DMI/ADX. Returns {plusDI, minusDI, adx} for the last bar. */
+function dmi(h,l,c,period=14){
+  const n=h.length; if(n < period*2+1) return null;
+  let smTR=0, smP=0, smM=0;
+  for(let i=1;i<=period;i++){
+    const tr=Math.max(h[i]-l[i],Math.abs(h[i]-c[i-1]),Math.abs(l[i]-c[i-1]));
+    const up=h[i]-h[i-1], dn=l[i-1]-l[i];
+    smTR+=tr; smP+=(up>dn&&up>0)?up:0; smM+=(dn>up&&dn>0)?dn:0;
+  }
+  const dx=[]; let pDI=0,mDI=0;
+  const pushDX=()=>{ pDI=smTR?100*smP/smTR:0; mDI=smTR?100*smM/smTR:0; const s=pDI+mDI; dx.push(s?100*Math.abs(pDI-mDI)/s:0); };
+  pushDX();
+  for(let i=period+1;i<n;i++){
+    const tr=Math.max(h[i]-l[i],Math.abs(h[i]-c[i-1]),Math.abs(l[i]-c[i-1]));
+    const up=h[i]-h[i-1], dn=l[i-1]-l[i];
+    smTR=smTR-smTR/period+tr; smP=smP-smP/period+((up>dn&&up>0)?up:0); smM=smM-smM/period+((dn>up&&dn>0)?dn:0);
+    pushDX();
+  }
+  if(dx.length < period) return null;
+  let adx=0; for(let i=0;i<period;i++) adx+=dx[i]; adx/=period;
+  for(let i=period;i<dx.length;i++) adx=(adx*(period-1)+dx[i])/period;
+  return {plusDI:pDI, minusDI:mDI, adx};
+}
+function obv(closes, vols){
+  const out=new Array(closes.length).fill(0);
+  for(let i=1;i<closes.length;i++){ out[i]=out[i-1]+(closes[i]>closes[i-1]?vols[i]:closes[i]<closes[i-1]?-vols[i]:0); }
+  return out;
+}
+/* OI rising: last (n+1) completed points → n consecutive rises, cumulative ≥ thr% */
+function oiRising(oiValues, n, thrPct){
+  if(!oiValues || oiValues.length < n+1) return {rising:null, chg:null};
+  const w = oiValues.slice(-(n+1));
+  const first=w[0], last=w[w.length-1];
+  if(!(first>0)) return {rising:null, chg:null};
+  const chg = (last-first)/first*100;
+  let consistent=true;
+  for(let i=1;i<w.length;i++){ if(w[i] < w[i-1]*(1-0.001)) { consistent=false; break; } } // any real step down = spike-reversal → not rising
+  return {rising: consistent && chg >= thrPct, chg};
+}
+
+/* ============================================================
+   DATA LAYER  — Binance USDT-M Futures public REST
+   ============================================================ */
+const FAPI = 'https://fapi.binance.com';
+const KLINE_LIMIT = 300;      // enough warm-up for ADX(14) and EMA50 of OBV
+const CONCURRENCY = 6;
+const OI_PERIOD = {'5m':'5m','15m':'15m','1h':'1h','4h':'4h','1d':'1d'};
+
+const klineCache = new Map();  // key symbol|tf → {rows:[[openTime,o,h,l,c,v]], ts}
+const oiCache    = new Map();  // key symbol|tf → {vals:[], ts}
+let symbols=[], tickers={}, results=new Map(), mcaps={}, mcapTs=0, mcapLoading=null;
+const metricFilter={dmi:'any',rsiAboveEma:'any',rsiAbove50:'any',obvAboveEma:'any',oiRising:'any'};
+let bias='all';
+let tf='1h', filterMode='all', sortKey='bullScore', sortDir=-1;
+let scanning=false, reqCount=0, pauseUntil=0, abortCtl=null;
+
+async function fetchJSON(url, signal){
+  while(Date.now()<pauseUntil){ await sleep(500); if(signal?.aborted) throw new DOMException('aborted','AbortError'); }
+  reqCount++; updateReq();
+  const r = await fetch(url,{signal});
+  if(r.status===429 || r.status===418){
+    const ra = parseInt(r.headers.get('Retry-After')||'0',10);
+    pauseUntil = Date.now() + (ra?ra*1000:30000);
+    setStatus('busy','Rate limited — pausing '+Math.round((pauseUntil-Date.now())/1000)+'s');
+    await sleep(pauseUntil-Date.now());
+    return fetchJSON(url, signal);
+  }
+  if(!r.ok) throw new Error('HTTP '+r.status+' '+url.split('?')[0]);
+  return r.json();
+}
+const sleep = ms=>new Promise(r=>setTimeout(r,ms));
+
+/* Market caps from CoinGecko (top 1000, four pages), keyed by ticker. Cached 15 min. */
+async function loadMarketCaps(force){
+  if(!force && Date.now()-mcapTs < 15*60*1000 && Object.keys(mcaps).length) return mcaps;
+  if(mcapLoading) return mcapLoading;
+  mcapLoading=(async()=>{
+    const out={};
+    try{
+      for(let page=1;page<=4;page++){
+        const r=await fetch(`https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=250&page=${page}&sparkline=false`);
+        if(r.status===429){ toast('CoinGecko rate limit hit — market caps partially loaded, try again in a minute.', true); break; }
+        if(!r.ok) throw new Error('CoinGecko HTTP '+r.status);
+        const d=await r.json();
+        d.forEach(c=>{ const k=(c.symbol||'').toUpperCase(); const mc=+c.market_cap||0; if(mc>(out[k]||0)) out[k]=mc; });
+        if(page<4) await sleep(1200);
+      }
+      mcaps=out; mcapTs=Date.now();
+      for(const [sym,r] of results){ r.mcap=mcapFor(sym); }
+      render();
+    }catch(e){ toast('Could not load market caps ('+e.message+').', true); }
+    finally{ mcapLoading=null; }
+    return mcaps;
+  })();
+  return mcapLoading;
+}
+function mcapFor(symbol){
+  const base=symbol.replace(/USDT$/,'');
+  const cands=[base, base.replace(/^1000000/,''), base.replace(/^1000/,''), base.replace(/^1M/,'')];
+  for(const c of cands){ if(mcaps[c]) return mcaps[c]; }
+  return null;
+}
+function fmtMcap(m){ if(m==null) return '<span class="flat">—</span>'; if(m>=1e9) return '$'+(m/1e9).toFixed(2)+'B'; if(m>=1e6) return '$'+(m/1e6).toFixed(0)+'M'; return '$'+(m/1e3).toFixed(0)+'K'; }
+/* Universe = perpetuals ranked by 24h quote volume, cut to Top-N if selected. */
+function universe(){
+  const n=+$('topN').value; const ranked=[...symbols].sort((a,b)=>(tickers[b]?.qv||0)-(tickers[a]?.qv||0));
+  return n? ranked.slice(0,n) : ranked;
+}
+async function loadSymbols(signal){
+  const info = await fetchJSON(FAPI+'/fapi/v1/exchangeInfo', signal);
+  symbols = info.symbols.filter(s=>s.contractType==='PERPETUAL' && s.quoteAsset==='USDT' && s.status==='TRADING').map(s=>s.symbol).sort();
+  const t = await fetchJSON(FAPI+'/fapi/v1/ticker/24hr', signal);
+  tickers={}; t.forEach(x=>tickers[x.symbol]={price:+x.lastPrice, chg:+x.priceChangePercent, qv:+x.quoteVolume});
+}
+
+/* Incremental kline fetch: first call pulls KLINE_LIMIT; later calls only fetch from the last cached open time. */
+async function getKlines(symbol, interval, signal){
+  const key=symbol+'|'+interval; const c=klineCache.get(key);
+  let rows;
+  if(c && c.rows.length){
+    const lastOpen = c.rows[c.rows.length-1][0];
+    const fresh = await fetchJSON(`${FAPI}/fapi/v1/klines?symbol=${symbol}&interval=${interval}&startTime=${lastOpen}&limit=99`, signal);
+    const map = new Map(c.rows.map(r=>[r[0],r]));
+    fresh.forEach(k=>map.set(k[0],[k[0],+k[1],+k[2],+k[3],+k[4],+k[5]]));
+    rows = [...map.values()].sort((a,b)=>a[0]-b[0]).slice(-KLINE_LIMIT);
+  } else {
+    const raw = await fetchJSON(`${FAPI}/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=${KLINE_LIMIT}`, signal);
+    rows = raw.map(k=>[k[0],+k[1],+k[2],+k[3],+k[4],+k[5]]);
+  }
+  klineCache.set(key,{rows,ts:Date.now()});
+  return rows;
+}
+async function getOI(symbol, interval, signal){
+  const key=symbol+'|'+interval;
+  const data = await fetchJSON(`${FAPI}/futures/data/openInterestHist?symbol=${symbol}&period=${OI_PERIOD[interval]}&limit=8`, signal);
+  const vals = (data||[]).map(d=>+d.sumOpenInterest);
+  oiCache.set(key,{vals,ts:Date.now()});
+  return vals;
+}
+
+/* ============================================================
+   EVALUATION
+   ============================================================ */
+function evaluate(symbol, rows, oiVals){
+  const closedOnly = document.getElementById('closedOnly').checked;
+  const k = closedOnly ? rows.slice(0,-1) : rows;
+  const t = tickers[symbol]||{};
+  const res = {symbol, sector:sectorsFor(symbol), price:t.price??null, chg:t.chg??null, qv:t.qv??0,
+    dmiBull:null,dmiBear:null,rsi:null,rsiEma:null,rsiAboveEma:null,rsiAbove50:null,obvAboveEma:null,oiRising:null,oiChg:null,adx:null,plusDI:null,minusDI:null,
+    bullScore:0,bearScore:0,incomplete:false, mcap:mcapFor(symbol), dmi:0};
+  if(k.length >= 70){
+    const h=k.map(r=>r[2]), l=k.map(r=>r[3]), c=k.map(r=>r[4]), v=k.map(r=>r[5]);
+    const d = dmi(h,l,c,14);
+    if(d){ res.adx=d.adx; res.plusDI=d.plusDI; res.minusDI=d.minusDI;
+      res.dmiBull = d.plusDI>d.minusDI && d.plusDI>d.adx;
+      res.dmiBear = d.minusDI>d.plusDI && d.minusDI>d.adx; }
+    const r = rsi(c,14); const rv=r.filter(x=>x!==null); const re = ema(rv,14);
+    const lastR = rv[rv.length-1], lastRE = re[re.length-1];
+    if(lastR!=null && lastRE!=null){ res.rsi=lastR; res.rsiEma=lastRE; res.rsiAboveEma=lastR>lastRE; res.rsiAbove50=lastR>50; }
+    const o = obv(c,v); const oe = ema(o,50); const lo=o[o.length-1], loe=oe[oe.length-1];
+    if(loe!=null){ res.obvAboveEma = lo>loe; }
+  } else res.incomplete=true;
+  const n = +document.getElementById('oiN').value, thr = +document.getElementById('oiThr').value;
+  // openInterestHist snapshots land on completed period boundaries; the last point is the latest closed period.
+  const oi = oiRising(oiVals, n, thr);
+  res.oiRising=oi.rising; res.oiChg=oi.chg;
+  res.dmi = res.dmiBull?2:res.dmiBear?0:res.dmiBull===null?-1:1;
+  if(res.dmiBull===null||res.rsiAboveEma===null||res.obvAboveEma===null||res.oiRising===null) res.incomplete=true;
+  res.bullScore = [res.dmiBull, res.rsiAboveEma, res.rsiAbove50, res.obvAboveEma, res.oiRising].filter(Boolean).length;
+  res.bearScore = [res.dmiBear, res.rsiAboveEma===false, res.rsiAbove50===false, res.obvAboveEma===false, res.oiRising].filter(Boolean).length;
+  return res;
+}
+/* Re-evaluate everything from cache without network (used when toggles change). */
+function reevaluateAll(){
+  for(const s of results.keys()){
+    const kc=klineCache.get(s+'|'+tf), oc=oiCache.get(s+'|'+tf);
+    if(kc) results.set(s, evaluate(s, kc.rows, oc?oc.vals:null));
+  }
+  render();
+}
+
+/* ============================================================
+   SCAN ORCHESTRATION
+   ============================================================ */
+async function scan(){
+  if(scanning){ abortCtl?.abort(); return; }
+  scanning=true; abortCtl=new AbortController(); const {signal}=abortCtl;
+  const btn=document.getElementById('refreshBtn'); btn.textContent='Stop';
+  document.getElementById('exportBtn').disabled=true;
+  showProgress(0); setStatus('busy','Loading symbol list…');
+  try{
+    if(!symbols.length || true) await loadSymbols(signal);  // ticker refresh every scan (one call, all pairs)
+    document.getElementById('cScannedSub').textContent='of '+universe().length+' in universe ('+symbols.length+' perpetuals)';
+    results = new Map();
+    const uni=universe(); const queue=[...uni]; let done=0, failed=0; const total=uni.length; if($('mcapMin').value!=='0') loadMarketCaps();
+    const worker=async()=>{
+      while(queue.length){
+        if(signal.aborted) return;
+        const s=queue.shift();
+        try{
+          const [rows, oi] = await Promise.all([getKlines(s,tf,signal), getOI(s,tf,signal).catch(()=>null)]);
+          results.set(s, evaluate(s, rows, oi));
+        }catch(e){ if(e.name==='AbortError') return; failed++; results.set(s,{symbol:s,sector:sectorsFor(s),price:tickers[s]?.price??null,chg:tickers[s]?.chg??null,qv:tickers[s]?.qv??0,incomplete:true,error:e.message,bullScore:0,bearScore:0}); }
+        done++;
+        if(done%10===0||done===total){ showProgress(done/total); setStatus('busy',`Scanning ${done}/${total}`); render(); }
+      }
+    };
+    await Promise.all(Array.from({length:CONCURRENCY},worker));
+    if(signal.aborted){ setStatus('idle','Stopped — showing partial results'); }
+    else{
+      setStatus('live',`Scan complete · ${total-failed} pairs${failed?` · ${failed} failed`:''}`);
+      document.getElementById('lastUpdated').textContent='Last updated: '+new Date().toLocaleTimeString();
+    }
+    render();
+  }catch(e){
+    if(e.name!=='AbortError'){
+      setStatus('err','Scan failed');
+      toast(`Could not reach Binance Futures API (${e.message}). Check VPN / network — fapi.binance.com must be reachable from the browser.`, true);
+    } else setStatus('idle','Stopped');
+  }finally{
+    scanning=false; btn.textContent='Refresh'; document.getElementById('exportBtn').disabled=false; hideProgress();
+  }
+}
+
+/* ============================================================
+   RENDER
+   ============================================================ */
+const $=id=>document.getElementById(id);
+function fmtPrice(p){ if(p==null) return '—'; if(p>=1000) return p.toLocaleString(undefined,{maximumFractionDigits:1}); if(p>=1) return p.toFixed(3); if(p>=0.01) return p.toFixed(5); return p.toPrecision(4); }
+function dmiPill(r){ if(r.dmiBull===null||r.dmiBull===undefined) return '<span class="pill na">N/A</span>'; if(r.dmiBull) return '<span class="pill yes">YES</span>'; if(r.dmiBear) return '<span class="pill no">NO</span>'; return '<span class="pill na">FLAT</span>'; }
+function pill(v){ return v===null||v===undefined ? '<span class="pill na">N/A</span>' : v ? '<span class="pill yes">YES</span>' : '<span class="pill no">NO</span>'; }
+function meter(n, cls){ let s=`<span class="align"><span class="meter ${cls}">`; for(let i=0;i<5;i++) s+=`<i class="${i<n?'f':''}"></i>`; s+=`</span><span class="n ${n>=4?(cls==='b'?'hot-b':'hot-s'):''}">${n}/5</span></span>`; return s; }
+function signed(x, digits=2){ if(x==null||isNaN(x)) return '<span class="flat">—</span>'; const c=x>0.0001?'pos':x<-0.0001?'neg':'flat'; return `<span class="${c}">${x>0?'+':''}${x.toFixed(digits)}%</span>`; }
+
+function visibleRows(){
+  const q=$('search').value.trim().toUpperCase(); const sec=$('sector').value;
+  let rows=[...results.values()];
+  if(q) rows=rows.filter(r=>r.symbol.includes(q));
+  if(sec) rows=rows.filter(r=>r.sector.includes(sec));
+  const n=+$('topN').value; if(n){ const allow=new Set(universe()); rows=rows.filter(r=>allow.has(r.symbol)); }
+  const mm=+$('mcapMin').value*1e6; if(mm) rows=rows.filter(r=>r.mcap!=null && r.mcap>=mm);
+  if(bias==='bull') rows=rows.filter(r=>r.bullScore>=4); else if(bias==='bear') rows=rows.filter(r=>r.bearScore>=4);
+  for(const [m,v] of Object.entries(metricFilter)){ if(m==='dmi'){ if(v==='yes') rows=rows.filter(r=>r.dmiBull===true); else if(v==='no') rows=rows.filter(r=>r.dmiBear===true); } else if(v==='yes') rows=rows.filter(r=>r[m]===true); else if(v==='no') rows=rows.filter(r=>r[m]===false); }
+  if(filterMode==='bull') rows=rows.filter(r=>r.bullScore>=4);
+  else if(filterMode==='bear') rows=rows.filter(r=>r.bearScore>=4);
+  else if(filterMode==='oi') rows=rows.filter(r=>r.oiRising===true);
+  else if(filterMode==='err') rows=rows.filter(r=>r.incomplete);
+  const dir=sortDir;
+  rows.sort((a,b)=>{
+    let x=a[sortKey], y=b[sortKey];
+    if(sortKey==='sector'){ x=(x[0]||'zzz'); y=(y[0]||'zzz'); }
+    if(typeof x==='boolean'||x===null||x===undefined) x = x===true?2:x===false?1:0;
+    if(typeof y==='boolean'||y===null||y===undefined) y = y===true?2:y===false?1:0;
+    if(typeof x==='string') return dir*x.localeCompare(y);
+    if(x===y){ // tie-break: alignment then volume
+      const t=(b.bullScore-a.bullScore)||(b.bearScore-a.bearScore)||(b.qv-a.qv); return t;
+    }
+    return dir*(x-y);
+  });
+  return rows;
+}
+function render(){
+  const rows=visibleRows();
+  const all=[...results.values()];
+  $('cScanned').textContent=all.length;
+  $('cBull').textContent=all.filter(r=>r.bullScore>=4).length;
+  $('cBear').textContent=all.filter(r=>r.bearScore>=4).length;
+  $('cOI').textContent=all.filter(r=>r.oiRising===true).length;
+  $('cErr').textContent=all.filter(r=>r.incomplete).length;
+  document.querySelectorAll('.card').forEach(c=>c.classList.toggle('active',c.dataset.filter===filterMode));
+  document.querySelectorAll('thead th').forEach(th=>{ th.classList.toggle('sorted',th.dataset.k===sortKey); th.querySelector('.arr').textContent = th.dataset.k===sortKey ? (sortDir<0?'↓':'↑') : '↕'; });
+  $('rowInfo').textContent=`${rows.length} of ${all.length} rows · timeframe ${tf.toUpperCase()}`;
+  if(!rows.length){ $('tbody').innerHTML=`<tr><td colspan="13" class="empty">${all.length? 'No pairs match the current filters.' : 'Press <b>Scan</b> to load every Binance USDT perpetual and evaluate the confirmation checks.'}</td></tr>`; return; }
+  const html=rows.map(r=>{
+    const rowCls = r.bullScore>=4?'full-bull':r.bearScore>=4?'full-bear':'';
+    const dmiTip = r.adx!=null?`title="+DI ${r.plusDI.toFixed(1)} · −DI ${r.minusDI.toFixed(1)} · ADX ${r.adx.toFixed(1)}"`:'';
+    const oiTip = r.oiChg!=null?`title="OI change ${r.oiChg.toFixed(2)}% over last ${$('oiN').value} candles"`:(r.error?`title="${r.error}"`:'');
+    return `<tr class="${rowCls}">
+      <td class="sym">${r.symbol.replace(/USDT$/,'')}<small>${r.symbol}</small></td>
+      <td>${r.sector.length? r.sector.slice(0,3).map(s=>`<span class="tag">${s}</span>`).join('') : '<span class="flat">—</span>'}</td>
+      <td class="num">${fmtPrice(r.price)}</td>
+      <td class="num">${signed(r.chg)}</td>
+      <td class="num mcap">${fmtMcap(r.mcap)}</td>
+      <td class="ctr" ${dmiTip}>${dmiPill(r)}</td>
+      <td class="ctr">${pill(r.rsiAboveEma)}</td>
+      <td class="ctr">${pill(r.rsiAbove50)}</td>
+      <td class="ctr">${pill(r.obvAboveEma)}</td>
+      <td class="ctr" ${oiTip}>${pill(r.oiRising)}</td>
+      <td class="num">${signed(r.oiChg)}</td>
+      <td>${meter(r.bullScore,'b')}</td>
+      <td>${meter(r.bearScore,'s')}</td>
+    </tr>`;
+  }).join('');
+  $('tbody').innerHTML=html;
+}
+
+/* ============================================================
+   CSV
+   ============================================================ */
+function exportCSV(){
+  const rows=visibleRows(); if(!rows.length){ toast('Nothing to export yet — run a scan first.'); return; }
+  const yn=v=>v===null||v===undefined?'N/A':v?'Yes':'No';
+  const head=['Symbol','Sector','Price','24h %','Market Cap','DMI','+DI','-DI','ADX','RSI Above EMA','RSI Above 50','OBV Above EMA50','OI Rising','OI Change %','Bull Score','Bear Score','Timeframe'];
+  const lines=[head.join(',')].concat(rows.map(r=>[
+    r.symbol, `"${(r.sector||[]).join(' | ')}"`, r.price??'', r.chg!=null?r.chg.toFixed(2):'', r.mcap??'', r.dmiBull==null?'N/A':r.dmiBull?'Yes (bullish)':r.dmiBear?'No (bearish)':'Flat',
+    r.plusDI!=null?r.plusDI.toFixed(2):'', r.minusDI!=null?r.minusDI.toFixed(2):'', r.adx!=null?r.adx.toFixed(2):'',
+    yn(r.rsiAboveEma), yn(r.rsiAbove50), yn(r.obvAboveEma), yn(r.oiRising),
+    r.oiChg!=null?r.oiChg.toFixed(2):'', r.bullScore, r.bearScore, tf
+  ].join(',')));
+  const blob=new Blob([lines.join('\n')],{type:'text/csv'}); const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download=`trend-confirmation-${tf}-${new Date().toISOString().slice(0,16).replace(/[:T]/g,'-')}.csv`; a.click(); URL.revokeObjectURL(a.href);
+}
+
+/* ============================================================
+   UI WIRING
+   ============================================================ */
+function setStatus(kind,text){ const d=$('dot'); d.className='dot '+(kind==='idle'?'':kind); $('statusText').textContent=text; }
+function updateReq(){ $('reqCount').textContent=reqCount?`${reqCount} requests`:''; }
+function showProgress(p){ $('progress').classList.add('show'); $('progressBar').style.width=(p*100).toFixed(1)+'%'; }
+function hideProgress(){ setTimeout(()=>$('progress').classList.remove('show'),400); }
+let toastT; function toast(msg,err){ const t=$('toast'); t.textContent=msg; t.className='toast show'+(err?' err':''); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),6000); }
+
+$('refreshBtn').addEventListener('click',scan);
+$('exportBtn').addEventListener('click',exportCSV);
+$('search').addEventListener('input',render);
+$('sector').addEventListener('change',render);
+$('topN').addEventListener('change',()=>{ render(); if(results.size){ const uni=universe(); const missing=uni.filter(x=>!results.has(x)).length; if(missing) setStatus('idle',`${missing} pairs in this universe not scanned yet — press Refresh`); } });
+$('mcapMin').addEventListener('change',()=>{ if($('mcapMin').value!=='0' && !Object.keys(mcaps).length){ setStatus('busy','Loading market caps from CoinGecko…'); loadMarketCaps().then(()=>{ if(!scanning) setStatus('live','Market caps loaded'); }); } render(); });
+document.querySelectorAll('#biasSeg button').forEach(b=>b.addEventListener('click',()=>{ document.querySelectorAll('#biasSeg button').forEach(x=>x.classList.remove('on')); b.classList.add('on'); bias=b.dataset.bias; render(); }));
+$('mfToggle').addEventListener('click',()=>$('mfPanel').classList.toggle('open'));
+function updateMfBadge(){ const c=Object.values(metricFilter).filter(v=>v!=='any').length; const el=$('mfCount'); el.textContent=c; el.style.display=c?'inline-block':'none'; }
+document.querySelectorAll('.mf').forEach(box=>{ const m=box.dataset.m; box.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{ box.querySelectorAll('button').forEach(x=>{x.classList.remove('on','yes','no');}); b.classList.add('on'); if(b.dataset.v!=='any') b.classList.add(b.dataset.v); metricFilter[m]=b.dataset.v; updateMfBadge(); render(); })); });
+$('mfReset').addEventListener('click',()=>{ document.querySelectorAll('.mf').forEach(box=>{ metricFilter[box.dataset.m]='any'; box.querySelectorAll('button').forEach(x=>{x.classList.remove('on','yes','no'); if(x.dataset.v==='any') x.classList.add('on');}); }); updateMfBadge(); render(); });
+$('closedOnly').addEventListener('change',reevaluateAll);
+$('oiThr').addEventListener('change',reevaluateAll);
+$('oiN').addEventListener('change',reevaluateAll);
+document.querySelectorAll('#tfSeg button').forEach(b=>b.addEventListener('click',()=>{
+  if(scanning){ toast('Stop the current scan before changing timeframe.'); return; }
+  document.querySelectorAll('#tfSeg button').forEach(x=>x.classList.remove('on')); b.classList.add('on'); tf=b.dataset.tf;
+  results=new Map(); render(); setStatus('idle','Timeframe '+tf.toUpperCase()+' — press Scan');
+}));
+document.querySelectorAll('.card').forEach(c=>c.addEventListener('click',()=>{ filterMode = filterMode===c.dataset.filter?'all':c.dataset.filter; render(); }));
+document.querySelectorAll('thead th').forEach(th=>{ th.tabIndex=0; const h=()=>{ const k=th.dataset.k; if(sortKey===k) sortDir*=-1; else { sortKey=k; sortDir = (k==='symbol'||k==='sector')?1:-1; } render(); }; th.addEventListener('click',h); th.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){e.preventDefault();h();} }); });
+// sector dropdown from the map
+(()=>{ const set=new Set(); Object.values(SECTORS).forEach(a=>a.forEach(s=>set.add(s))); [...set].sort().forEach(s=>{ const o=document.createElement('option'); o.value=s; o.textContent=s; $('sector').appendChild(o); }); })();
+</script>
+</body>
+</html>
