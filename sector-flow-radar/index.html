@@ -1,0 +1,992 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sector Flow Radar — where volume is going</title>
+<style>
+  :root{
+    --bg:#0B0F17; --panel:#121826; --panel2:#0F1521; --line:rgba(255,255,255,.07);
+    --line2:rgba(255,255,255,.12);
+    --txt:#E6EDF7; --mut:#7E8CA3; --dim:#5A6679;
+    --green:#22D39A; --red:#FF5C7A; --amber:#FFB347; --blue:#4C9AFF; --violet:#9E7BFF;
+    --mono:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:
+      radial-gradient(900px 500px at 12% -10%, rgba(76,154,255,.10), transparent 60%),
+      radial-gradient(800px 500px at 88% -5%, rgba(34,211,154,.08), transparent 60%),
+      var(--bg);
+    color:var(--txt);
+    font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    font-size:14px; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1500px;margin:0 auto;padding:22px 18px 70px}
+
+  /* ---------- header ---------- */
+  header.top{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;justify-content:space-between;margin-bottom:18px}
+  .brand h1{margin:0;font-size:24px;font-weight:700;letter-spacing:-.5px}
+  .brand h1 span{color:var(--blue)}
+  .brand p{margin:6px 0 0;color:var(--mut);font-size:13px;max-width:640px;line-height:1.5}
+  .headright{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .stamp{font-family:var(--mono);font-size:11px;color:var(--dim);text-align:right;line-height:1.6}
+  button{font-family:inherit;font-size:13px;cursor:pointer;color:var(--txt);
+    background:var(--panel);border:1px solid var(--line2);border-radius:10px;padding:9px 14px;transition:.15s}
+  button:hover{border-color:var(--blue);color:#fff}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  button.primary{background:linear-gradient(180deg,#1b3350,#132539);border-color:rgba(76,154,255,.45);color:#CFE4FF;font-weight:600}
+  button:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+
+  /* ---------- panels ---------- */
+  .panel{background:linear-gradient(180deg,rgba(255,255,255,.025),rgba(255,255,255,0)),var(--panel);
+    border:1px solid var(--line);border-radius:14px}
+
+  /* ---------- how to read ---------- */
+  details.guide{margin-bottom:16px}
+  details.guide summary{list-style:none;cursor:pointer;padding:12px 16px;color:var(--mut);font-size:13px;
+    background:var(--panel2);border:1px solid var(--line);border-radius:12px;display:flex;justify-content:space-between}
+  details.guide summary::-webkit-details-marker{display:none}
+  details.guide summary:hover{color:var(--txt)}
+  .guidebody{padding:16px;margin-top:8px;display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+  .gcard h4{margin:0 0 6px;font-size:13px;letter-spacing:.4px;text-transform:uppercase}
+  .gcard p{margin:0;color:var(--mut);font-size:12.5px;line-height:1.6}
+  .gcard code{font-family:var(--mono);color:var(--txt);background:rgba(255,255,255,.05);padding:1px 5px;border-radius:4px;font-size:11.5px}
+
+  /* ---------- controls ---------- */
+  .controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:12px 14px;margin-bottom:16px}
+  .seg{display:flex;background:var(--panel2);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .seg button{background:transparent;border:0;border-radius:0;padding:8px 14px;color:var(--mut);font-size:12.5px}
+  .seg button.on{background:rgba(76,154,255,.16);color:#CFE4FF;font-weight:600}
+  label.ctl{display:flex;align-items:center;gap:7px;color:var(--mut);font-size:12.5px}
+  select,input[type=search]{font-family:inherit;font-size:12.5px;color:var(--txt);background:var(--panel2);
+    border:1px solid var(--line);border-radius:9px;padding:8px 10px}
+  input[type=search]{min-width:170px}
+  select:focus,input:focus{outline:1px solid var(--blue)}
+  .spacer{flex:1}
+
+  /* ---------- highlight cards ---------- */
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px;margin-bottom:16px}
+  .card{padding:15px 16px;position:relative;overflow:hidden}
+  .card .eyebrow{font-size:10.5px;letter-spacing:1.3px;text-transform:uppercase;color:var(--dim);margin-bottom:9px}
+  .card .big{font-size:19px;font-weight:700;letter-spacing:-.3px;margin-bottom:3px}
+  .card .val{font-family:var(--mono);font-size:13px;color:var(--txt);margin-bottom:7px}
+  .card .why{font-size:12px;color:var(--mut);line-height:1.5}
+  .card::after{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--c,var(--blue))}
+
+  /* ---------- table ---------- */
+  .tablewrap{overflow-x:auto;border-radius:14px}
+  table{width:100%;border-collapse:collapse;min-width:1000px}
+  thead th{position:sticky;top:0;z-index:2;background:#0E1420;text-align:right;padding:11px 12px;
+    font-size:10.5px;letter-spacing:.9px;text-transform:uppercase;color:var(--dim);
+    border-bottom:1px solid var(--line2);cursor:pointer;white-space:nowrap;user-select:none}
+  thead th:first-child,tbody td:first-child{text-align:left}
+  thead th:hover{color:var(--txt)}
+  thead th .ar{color:var(--blue);font-size:9px}
+  tbody td{padding:11px 12px;text-align:right;border-bottom:1px solid rgba(255,255,255,.045);
+    font-family:var(--mono);font-size:12.5px;white-space:nowrap}
+  tbody tr{cursor:pointer;transition:background .12s}
+  tbody tr:hover{background:rgba(255,255,255,.032)}
+  .sname{font-family:inherit;font-size:13.5px;font-weight:600;letter-spacing:-.1px}
+  .scount{color:var(--dim);font-size:11px;font-family:var(--mono);margin-left:7px;font-weight:400}
+  .pos{color:var(--green)} .neg{color:var(--red)} .neu{color:var(--mut)}
+
+  .bar{position:relative;height:5px;border-radius:3px;background:rgba(255,255,255,.07);margin-top:5px;overflow:hidden}
+  .bar i{position:absolute;left:0;top:0;bottom:0;border-radius:3px;background:var(--bc,var(--blue))}
+  .dvg{position:relative;height:5px;border-radius:3px;background:rgba(255,255,255,.07);margin-top:5px}
+  .dvg i{position:absolute;top:0;bottom:0;border-radius:3px}
+  .dvg u{position:absolute;top:-2px;bottom:-2px;left:50%;width:1px;background:rgba(255,255,255,.22)}
+
+  .chip{display:inline-block;padding:4px 9px;border-radius:20px;font-family:inherit;font-size:11px;font-weight:600;
+    letter-spacing:.2px;border:1px solid transparent;white-space:nowrap}
+  .c-in{background:rgba(34,211,154,.13);color:var(--green);border-color:rgba(34,211,154,.3)}
+  .c-out{background:rgba(255,92,122,.13);color:var(--red);border-color:rgba(255,92,122,.3)}
+  .c-mix{background:rgba(255,179,71,.13);color:var(--amber);border-color:rgba(255,179,71,.3)}
+  .c-one{background:rgba(158,123,255,.13);color:var(--violet);border-color:rgba(158,123,255,.3)}
+  .c-quiet{background:rgba(255,255,255,.05);color:var(--mut);border-color:var(--line2)}
+
+  tr.expand td{padding:0;background:var(--panel2)}
+  .exphead{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;
+    padding:12px 16px 8px;border-bottom:1px solid var(--line)}
+  .exphead .t{font-size:13px;font-weight:600}
+  .exphead .n{font-family:var(--mono);font-size:11.5px;color:var(--dim)}
+  .expscroll{max-height:430px;overflow-y:auto}
+  table.mini{width:100%;min-width:640px;border-collapse:collapse}
+  table.mini th{position:sticky;top:0;background:#0D131F;text-align:right;padding:8px 14px;font-size:10px;
+    letter-spacing:.8px;text-transform:uppercase;color:var(--dim);cursor:pointer;white-space:nowrap;
+    border-bottom:1px solid var(--line);z-index:1;user-select:none}
+  table.mini th:first-child,table.mini td:first-child{text-align:left}
+  table.mini th:hover{color:var(--txt)}
+  table.mini td{padding:8px 14px;text-align:right;font-family:var(--mono);font-size:12px;
+    border-bottom:1px solid rgba(255,255,255,.04);white-space:nowrap}
+  table.mini tr:hover td{background:rgba(255,255,255,.03)}
+  table.mini td.cn{font-family:inherit;font-size:12.5px;font-weight:600}
+  .dot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:7px;vertical-align:middle}
+  .coins{display:grid;grid-template-columns:repeat(auto-fill,minmax(178px,1fr));gap:8px;padding:14px 16px}
+  .coin{background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:9px;padding:9px 11px}
+  .coin .sym{font-family:inherit;font-size:12.5px;font-weight:600;margin-bottom:5px}
+  .coin .row{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;color:var(--mut);margin-top:2px}
+  .coin .row b{font-weight:600}
+  .expnote{padding:0 16px 14px;color:var(--dim);font-size:11.5px}
+
+  /* ---------- states ---------- */
+  .status{padding:34px 20px;text-align:center;color:var(--mut);font-size:13px}
+  .prog{height:4px;background:rgba(255,255,255,.07);border-radius:3px;overflow:hidden;max-width:420px;margin:16px auto 0}
+  .prog i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--blue),var(--green));transition:width .2s}
+  .err{color:var(--red)}
+  footer{margin-top:16px;color:var(--dim);font-size:11.5px;line-height:1.7}
+  footer b{color:var(--mut);font-weight:600}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+  @media(max-width:640px){.wrap{padding:16px 12px 60px}.brand h1{font-size:20px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="brand">
+      <h1>Sector Flow <span>Radar</span></h1>
+      <p>Which crypto sectors are actually pulling volume right now — measured against each sector's own normal, not against Bitcoin.</p>
+    </div>
+    <div class="headright">
+      <div class="stamp" id="stamp">Not loaded yet</div>
+      <button id="csv">Export CSV</button>
+      <button class="primary" id="refresh">Load data</button>
+    </div>
+  </header>
+
+  <details class="guide">
+    <summary><span>How to read this — three numbers, that's it</span><span>▾</span></summary>
+    <div class="guidebody panel">
+      <div class="gcard">
+        <h4 style="color:var(--blue)">1 · Vs week and vs month</h4>
+        <p>Today's volume divided by a normal day — measured two ways. <code>Vs week</code> uses the last 7 days, <code>vs month</code> uses the last 30. <code>1.0</code> is normal, <code>2.0</code> is double. Both high = a real move with fuel behind it. Month high but week flat = it has been hot all week already, you are late. Week high but month flat = something just started today.</p>
+      </div>
+      <div class="gcard">
+        <h4 style="color:var(--green)">2 · Share change</h4>
+        <p>The slice of all altcoin volume this sector is taking today, minus its average slice over the last 7 days. Shown in percentage points. Money has to come from somewhere, so a sector gaining share means another one is losing it. <b>This is the rotation signal.</b></p>
+      </div>
+      <div class="gcard">
+        <h4 style="color:var(--amber)">3 · Participation</h4>
+        <p>How many coins in the sector are individually busy (their own volume above 1.5× normal). High volume with low participation means one coin is pumping and the sector is not really moving. This column kills most false alarms.</p>
+      </div>
+      <div class="gcard">
+        <h4 style="color:var(--violet)">Reading the verdict</h4>
+        <p>Volume alone never says who is buying. The verdict pairs volume with the sector's volume-weighted price move: heavy volume with price up is money coming in, heavy volume with price down is people getting out. Open any row to see the coins driving it.</p>
+      </div>
+    </div>
+  </details>
+
+  <div class="controls panel">
+    <div class="seg" id="viewseg">
+      <button data-view="narrative" class="on">Narratives</button>
+      <button data-view="ecosystem">Ecosystems &amp; tags</button>
+      <button data-view="all">Everything</button>
+    </div>
+    <label class="ctl">Ignore coins under
+      <select id="minvol">
+        <option value="250000">$250K/day</option>
+        <option value="1000000" selected>$1M/day</option>
+        <option value="5000000">$5M/day</option>
+        <option value="20000000">$20M/day</option>
+      </select>
+    </label>
+    <label class="ctl">Min coins
+      <select id="mincoins">
+        <option value="1">1</option>
+        <option value="3" selected>3</option>
+        <option value="5">5</option>
+        <option value="8">8</option>
+      </select>
+    </label>
+    <input type="search" id="search" placeholder="Find a sector…" />
+    <div class="spacer"></div>
+    <label class="ctl"><input type="checkbox" id="btceth" /> Include BTC &amp; ETH</label>
+  </div>
+
+  <div class="cards" id="cards"></div>
+
+  <div class="panel tablewrap">
+    <table>
+      <thead><tr id="hrow"></tr></thead>
+      <tbody id="tbody">
+        <tr><td colspan="10"><div class="status">Press <b>Load data</b> to pull live Binance volume and build the 20-day baseline.<div class="prog" style="display:none"><i></i></div></div></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <footer>
+    <b>Data:</b> Binance public spot API — rolling 24h volume plus 30 closed daily candles per coin for the week and month baselines. No key, no account.<br />
+    <b>One thing to know:</b> coins carry several tags (INJ is AI, DEFI and L1//L2 at once), so a coin's volume counts toward each of its sectors. Share percentages are normalised across all sectors shown, so they still add to 100% and still work as a rotation signal.<br />
+    <b>Not a signal:</b> volume tells you where attention is, not where price is going. Confirm on the chart before acting.
+  </footer>
+</div>
+
+<script>
+const SECTOR_RAW = {
+  "0GUSDT": ["AI, L1//L2, SEED"],
+  "1000CATUSDT": ["BNB Chain, LAUNCHPOOL, MEME, SEED"],
+  "1000CHEEMSUSDT": ["BNB Chain, MEME, SEED"],
+  "1000SATSUSDT": ["MEME, SEED"],
+  "1INCHUSDT": ["DEFI"],
+  "1MBABYDOGEUSDT": ["MEME, SEED"],
+  "2ZUSDT": ["INFRASTRUCTURE, SEED"],
+  "A2ZUSDT": ["GAMING, LAUNCHPAD"],
+  "AAVEUSDT": ["DEFI"],
+  "ACAUSDT": ["DEFI, L1//L2, POLKADOT"],
+  "ACEUSDT": ["GAMING, LAUNCHPOOL, SEED"],
+  "ACHUSDT": ["PAYMENTS"],
+  "ACMUSDT": ["FAN TOKENS"],
+  "ACXUSDT": ["DEFI, SEED"],
+  "ACTUSDT": ["AI, MEME, SEED"],
+  "ADAUSDT": ["L1//L2"],
+  "ADXUSDT": ["AI, INFRASTRUCTURE"],
+  "AEVOUSDT": ["DEFI, L1//L2, LAUNCHPOOL, SEED"],
+  "AGLDUSDT": ["GAMING, NFT, SEED"],
+  "AIUSDT": ["AI, GAMING, LAUNCHPOOL, SEED, YZI"],
+  "AIXBTUSDT": ["AI, MEME, SEED"],
+  "ALCXUSDT": ["DEFI"],
+  "ALGOUSDT": ["L1//L2"],
+  "ALICEUSDT": ["GAMING, LAUNCHPOOL, METAVERSE, NFT, SEED, YZI"],
+  "ALPINEUSDT": ["FAN TOKENS, LAUNCHPAD"],
+  "ALTUSDT": ["INFRASTRUCTURE, LAUNCHPOOL, SEED"],
+  "AMPUSDT": ["DEFI"],
+  "ANIMEUSDT": ["LAUNCHPOOL, NFT, SEED"],
+  "ANKRUSDT": ["DEFI, LIQUID STAKING, POW"],
+  "APEUSDT": ["NFT"],
+  "API3USDT": ["INFRASTRUCTURE"],
+  "APTUSDT": ["L1//L2, YZI"],
+  "ARBUSDT": ["L1//L2"],
+  "ARDRUSDT": ["L1//L2"],
+  "ARKMUSDT": ["INFRASTRUCTURE, LAUNCHPAD, YZI"],
+  "ARKUSDT": ["L1//L2"],
+  "ARPAUSDT": ["INFRASTRUCTURE, L1//L2"],
+  "ARUSDT": ["STORAGE"],
+  "ASRUSDT": ["BNB Chain, FAN TOKENS, LAUNCHPOOL"],
+  "ASTERUSDT": ["BNB Chain, DEFI, SEED"],
+  "ASTRUSDT": ["INFRASTRUCTURE, L1//L2, POLKADOT"],
+  "ATAUSDT": ["INFRASTRUCTURE, LAUNCHPOOL, POLKADOT, SEED"],
+  "ATMUSDT": ["BNB Chain, FAN TOKENS, LAUNCHPOOL"],
+  "ATOMUSDT": ["L1//L2"],
+  "AUCTIONUSDT": ["DEFI, SEED"],
+  "AUDIOUSDT": ["NFT"],
+  "AUSDT": ["L1//L2"],
+  "AVAXUSDT": ["L1//L2, RWA"],
+  "AVNTUSDT": ["DEFI, SEED"],
+  "AWEUSDT": ["AI"],
+  "AXLUSDT": ["INFRASTRUCTURE, L1//L2, SEED, YZI"],
+  "AXSUSDT": ["GAMING, LAUNCHPAD, METAVERSE, NFT, YZI"],
+  "BABYUSDT": ["L1//L2, SEED, YZI"],
+  "BANANAUSDT": ["DEFI, LAUNCHPOOL, SEED"],
+  "BANANAS31USDT": ["BNB Chain, MEME, SEED"],
+  "BANDUSDT": ["DEFI, INFRASTRUCTURE, LAUNCHPAD"],
+  "BARDUSDT": ["DEFI, SEED"],
+  "BARUSDT": ["FAN TOKENS, SEED"],
+  "BATUSDT": ["INFRASTRUCTURE"],
+  "BBUSDT": ["L1//L2, MEGADROP, RWA, SEED"],
+  "BCHUSDT": ["PAYMENTS, POW"],
+  "BEAMXUSDT": ["GAMING, LAUNCHPOOL, YZI"],
+  "BELUSDT": ["BNB Chain, DEFI, LAUNCHPOOL, SEED"],
+  "BERAUSDT": ["L1//L2, LAUNCHPOOL"],
+  "BICOUSDT": ["INFRASTRUCTURE"],
+  "BIFIUSDT": ["BNB Chain, DEFI, SEED"],
+  "BIGTIMEUSDT": ["GAMING, SEED"],
+  "BIOUSDT": ["LAUNCHPOOL, YZI"],
+  "BLURUSDT": ["NFT"],
+  "BMTUSDT": ["BNB Chain, INFRASTRUCTURE, LAUNCHPOOL, SEED"],
+  "BNBUSDT": ["BNB Chain, L1//L2"],
+  "BNTUSDT": ["DEFI"],
+  "BOMEUSDT": ["MEME, SEED, Solana"],
+  "BONKUSDT": ["MEME, Solana"],
+  "BROCCOLI714USDT": ["BNB Chain, MEME, SEED"],
+  "BTCUSDT": ["PAYMENTS, POW"],
+  "BTTCUSDT": ["LAUNCHPAD, STORAGE"],
+  "C98USDT": ["BNB Chain, DEFI, LAUNCHPAD"],
+  "CAKEUSDT": ["BNB Chain, DEFI"],
+  "CATIUSDT": ["GAMING, LAUNCHPOOL, SEED, YZI"],
+  "CELOUSDT": ["DEFI, L1//L2"],
+  "CELRUSDT": ["L1//L2, LAUNCHPAD"],
+  "CETUSUSDT": ["DEFI, SEED"],
+  "CFXUSDT": ["L1//L2, POW"],
+  "CGPTUSDT": ["AI, BNB Chain, INFRASTRUCTURE, SEED"],
+  "CHESSUSDT": ["DEFI, LIQUID STAKING, SEED, YZI"],
+  "CHRUSDT": ["AI, L1//L2, NFT, RWA"],
+  "CHZUSDT": ["FAN TOKENS, L1//L2, NFT"],
+  "CITYUSDT": ["FAN TOKENS, LAUNCHPOOL"],
+  "CKBUSDT": ["L1//L2, POW"],
+  "COMPUSDT": ["DEFI"],
+  "COOKIEUSDT": ["AI, BNB Chain, SEED"],
+  "COTIUSDT": ["PAYMENTS"],
+  "COWUSDT": ["DEFI, SEED"],
+  "CRVUSDT": ["DEFI"],
+  "CTKUSDT": ["BNB Chain, INFRASTRUCTURE, LAUNCHPOOL, YZI"],
+  "CTSIUSDT": ["L1//L2, LAUNCHPAD"],
+  "CUSDT": ["INFRASTRUCTURE, SEED"],
+  "CVCUSDT": ["INFRASTRUCTURE"],
+  "CVXUSDT": ["DEFI"],
+  "CYBERUSDT": ["INFRASTRUCTURE, LAUNCHPOOL, SEED, YZI"],
+  "DASHUSDT": ["POW"],
+  "DATAUSDT": ["INFRASTRUCTURE"],
+  "DCRUSDT": ["L1//L2, POW"],
+  "DEGOUSDT": ["BNB Chain, DEFI, LAUNCHPAD, NFT, SEED"],
+  "DENTUSDT": ["INFRASTRUCTURE"],
+  "DEXEUSDT": ["DEFI, SEED"],
+  "DFUSDT": ["DEFI, SEED"],
+  "DGBUSDT": ["POW"],
+  "DIAUSDT": ["DEFI, INFRASTRUCTURE"],
+  "DODOUSDT": ["BNB Chain, DEFI, LAUNCHPOOL, SEED"],
+  "DOGEUSDT": ["MEME, POW"],
+  "DOGSUSDT": ["LAUNCHPOOL, MEME, SEED"],
+  "DOLOUSDT": ["DEFI, SEED"],
+  "DOTUSDT": ["L1//L2, POLKADOT"],
+  "DUSDT": ["BNB Chain, GAMING, LAUNCHPOOL, METAVERSE, NFT, YZI"],
+  "DUSKUSDT": ["INFRASTRUCTURE, RWA"],
+  "DYDXUSDT": ["DEFI"],
+  "DYMUSDT": ["INFRASTRUCTURE, L1//L2, SEED"],
+  "EDENUSDT": ["RWA, SEED"],
+  "EDUUSDT": ["LAUNCHPAD"],
+  "EGLDUSDT": ["L1//L2, LAUNCHPAD"],
+  "EIGENUSDT": ["DEFI, INFRASTRUCTURE"],
+  "ENAUSDT": ["DEFI, LAUNCHPOOL, YZI"],
+  "ENJUSDT": ["GAMING, L1//L2, NFT"],
+  "ENSOUSDT": ["INFRASTRUCTURE, SEED"],
+  "ENSUSDT": ["INFRASTRUCTURE"],
+  "EPICUSDT": ["L1//L2, RWA, SEED"],
+  "ERAUSDT": ["INFRASTRUCTURE, SEED"],
+  "ETCUSDT": ["L1//L2, POW"],
+  "ETHFIUSDT": ["DEFI, LAUNCHPOOL"],
+  "ETHUSDT": ["L1//L2"],
+  "EULUSDT": ["DEFI, SEED"],
+  "FARMUSDT": ["DEFI"],
+  "FETUSDT": ["AI, INFRASTRUCTURE, LAUNCHPAD"],
+  "FFUSDT": ["DEFI, SEED"],
+  "FIDAUSDT": ["INFRASTRUCTURE, Solana"],
+  "FILUSDT": ["STORAGE"],
+  "FIOUSDT": ["INFRASTRUCTURE, NFT"],
+  "FISUSDT": ["DEFI, LIQUID STAKING, SEED"],
+  "FLMUSDT": ["DEFI, LAUNCHPOOL, SEED"],
+  "FLOKIUSDT": ["BNB Chain, GAMING, MEME, METAVERSE, SEED"],
+  "FLOWUSDT": ["L1//L2"],
+  "FLUXUSDT": ["AI, INFRASTRUCTURE, L1//L2, POW"],
+  "FORMUSDT": ["BNB Chain, LAUNCHPAD, SEED"],
+  "FORTHUSDT": ["DEFI"],
+  "FUSDT": ["DEFI, SEED"],
+  "FXSUSDT": ["DEFI, LIQUID STAKING"],
+  "GALAUSDT": ["BNB Chain, GAMING, NFT, YZI"],
+  "GHSTUSDT": ["DEFI, GAMING, METAVERSE, NFT, SEED"],
+  "GIGGLEUSDT": ["BNB Chain, MEME, SEED"],
+  "GLMRUSDT": ["L1//L2, POLKADOT"],
+  "GLMUSDT": ["INFRASTRUCTURE"],
+  "GMTUSDT": ["LAUNCHPAD, NFT, Solana, YZI"],
+  "GMXUSDT": ["DEFI"],
+  "GNOUSDT": ["L1//L2"],
+  "GNSUSDT": ["DEFI, SEED"],
+  "GPSUSDT": ["INFRASTRUCTURE, SEED, YZI"],
+  "GRTUSDT": ["AI, INFRASTRUCTURE"],
+  "GTCUSDT": ["INFRASTRUCTURE"],
+  "GUNUSDT": ["GAMING, L1//L2, LAUNCHPOOL, SEED"],
+  "GUSDT": ["INFRASTRUCTURE, SEED"],
+  "HAEDALUSDT": ["LAUNCHPOOL, LIQUID STAKING, SEED"],
+  "HBARUSDT": ["L1//L2"],
+  "HEIUSDT": ["DEFI, INFRASTRUCTURE, LAUNCHPOOL, SEED"],
+  "HEMIUSDT": ["L1//L2, SEED"],
+  "HFTUSDT": ["DEFI, LAUNCHPOOL, SEED, YZI"],
+  "HIGHUSDT": ["LAUNCHPOOL, METAVERSE, NFT, YZI"],
+  "HIVEUSDT": ["L1//L2"],
+  "HMSTRUSDT": ["GAMING, LAUNCHPOOL, SEED"],
+  "HOLOUSDT": ["AI, SEED"],
+  "HOMEUSDT": ["DEFI, LAUNCHPOOL, SEED"],
+  "HOOKUSDT": ["BNB Chain, INFRASTRUCTURE, LAUNCHPAD, SEED, YZI"],
+  "HOTUSDT": ["L1//L2, STORAGE"],
+  "HUMAUSDT": ["LAUNCHPOOL, PAYMENTS, SEED"],
+  "HYPERUSDT": ["INFRASTRUCTURE, LAUNCHPOOL, SEED"],
+  "ICPUSDT": ["L1//L2, RWA"],
+  "ICXUSDT": ["L1//L2"],
+  "IDEXUSDT": ["DEFI"],
+  "IDUSDT": ["BNB Chain, INFRASTRUCTURE, LAUNCHPAD, SEED, YZI"],
+  "ILVUSDT": ["GAMING, METAVERSE"],
+  "IMXUSDT": ["GAMING, L1//L2, NFT"],
+  "INITUSDT": ["L1//L2, LAUNCHPOOL, SEED, YZI"],
+  "INJUSDT": ["AI, BNB Chain, DEFI, L1//L2, LAUNCHPAD, RWA, YZI"],
+  "IOSTUSDT": ["L1//L2"],
+  "IOTAUSDT": ["L1//L2, POW"],
+  "IOTXUSDT": ["INFRASTRUCTURE, L1//L2"],
+  "IOUSDT": ["AI, INFRASTRUCTURE, LAUNCHPOOL, SEED, Solana"],
+  "IQUSDT": ["AI"],
+  "JASMYUSDT": ["INFRASTRUCTURE"],
+  "JOEUSDT": ["DEFI"],
+  "JSTUSDT": ["DEFI"],
+  "JTOUSDT": ["DEFI, Solana"],
+  "JUPUSDT": ["DEFI, Solana"],
+  "JUVUSDT": ["BNB Chain, FAN TOKENS, LAUNCHPOOL"],
+  "KAIAUSDT": ["DEFI, L1//L2, LAUNCHPOOL"],
+  "KAITOUSDT": ["AI, INFRASTRUCTURE, LAUNCHPOOL, SEED"],
+  "KAVAUSDT": ["DEFI, L1//L2, LAUNCHPAD"],
+  "KDAUSDT": ["L1//L2, POW"],
+  "KERNELUSDT": ["BNB Chain, DEFI, MEGADROP, SEED, YZI"],
+  "KMNOUSDT": ["DEFI, SEED"],
+  "KNCUSDT": ["DEFI"],
+  "KSMUSDT": ["L1//L2, POLKADOT"],
+  "LAUSDT": ["INFRASTRUCTURE, SEED"],
+  "LAYERUSDT": ["DEFI, INFRASTRUCTURE, LAUNCHPOOL, SEED, Solana, YZI"],
+  "LAZIOUSDT": ["FAN TOKENS, LAUNCHPAD"],
+  "LDOUSDT": ["DEFI, LIQUID STAKING"],
+  "LINEAUSDT": ["L1//L2, LAUNCHPOOL, SEED"],
+  "LINKUSDT": ["INFRASTRUCTURE"],
+  "LISTAUSDT": ["BNB Chain, DEFI, LIQUID STAKING, MEGADROP, SEED"],
+  "LITUSDT": ["INFRASTRUCTURE"],
+  "LPTUSDT": ["AI, INFRASTRUCTURE"],
+  "LQTYUSDT": ["DEFI, SEED"],
+  "LRCUSDT": ["DEFI"],
+  "LSKUSDT": ["L1//L2"],
+  "LTCUSDT": ["PAYMENTS, POW"],
+  "LUMIAUSDT": ["DEFI, L1//L2, RWA"],
+  "LUNAUSDT": ["DEFI, L1//L2"],
+  "LUNCUSDT": ["DEFI, L1//L2"],
+  "MAGICUSDT": ["GAMING, METAVERSE, NFT, SEED"],
+  "MANAUSDT": ["GAMING, METAVERSE, NFT"],
+  "MANTAUSDT": ["L1//L2, LAUNCHPOOL, SEED"],
+  "MASKUSDT": ["INFRASTRUCTURE"],
+  "MAVUSDT": ["DEFI, INFRASTRUCTURE, LAUNCHPOOL"],
+  "MBLUSDT": ["GAMING, NFT"],
+  "MBOXUSDT": ["BNB Chain, DEFI, GAMING, LAUNCHPOOL, METAVERSE, NFT, YZI"],
+  "MDTUSDT": ["AI, INFRASTRUCTURE"],
+  "MEUSDT": ["NFT, SEED, Solana"],
+  "MEMEUSDT": ["LAUNCHPOOL, MEME, SEED"],
+  "METISUSDT": ["L1//L2, SEED"],
+  "MINAUSDT": ["L1//L2"],
+  "MIRAUSDT": ["AI, SEED"],
+  "MITOUSDT": ["DEFI, SEED"],
+  "MLNUSDT": ["DEFI"],
+  "MORPHOUSDT": ["DEFI, SEED"],
+  "MOVEUSDT": ["L1//L2, LAUNCHPOOL, SEED, YZI"],
+  "MOVRUSDT": ["L1//L2"],
+  "MTLUSDT": ["INFRASTRUCTURE"],
+  "MUBARAKUSDT": ["BNB Chain, MEME, SEED"],
+  "NEARUSDT": ["L1//L2"],
+  "NEIROUSDT": ["MEME, SEED"],
+  "NEOUSDT": ["L1//L2"],
+  "NEWTUSDT": ["AI, LAUNCHPOOL, SEED"],
+  "NFPUSDT": ["AI, LAUNCHPOOL, NFT, SEED, YZI"],
+  "NILUSDT": ["AI, L1//L2, LAUNCHPOOL, SEED"],
+  "NKNUSDT": ["INFRASTRUCTURE, POW"],
+  "NMRUSDT": ["AI, DEFI"],
+  "NOMUSDT": ["L1//L2, SEED"],
+  "NOTUSDT": ["GAMING, LAUNCHPOOL, SEED"],
+  "NTRNUSDT": ["L1//L2, SEED"],
+  "NXPCUSDT": ["GAMING, L1//L2, LAUNCHPOOL, SEED"],
+  "OGNUSDT": ["DEFI, LIQUID STAKING"],
+  "OGUSDT": ["BNB Chain, FAN TOKENS, LAUNCHPOOL, SEED"],
+  "OMUSDT": ["L1//L2, RWA, SEED"],
+  "ONEUSDT": ["L1//L2, LAUNCHPAD"],
+  "ONDOUSDT": ["INFRASTRUCTURE, RWA, SEED"],
+  "ONTUSDT": ["BNB Chain, L1//L2, POW"],
+  "OPENUSDT": ["AI, L1//L2, SEED"],
+  "OPUSDT": ["L1//L2, YZI"],
+  "ORCAUSDT": ["DEFI, SEED, Solana"],
+  "ORDIUSDT": ["MEME, SEED"],
+  "OSMOUSDT": ["DEFI, L1//L2"],
+  "OXTUSDT": ["INFRASTRUCTURE"],
+  "PARTIUSDT": ["INFRASTRUCTURE, L1//L2, LAUNCHPOOL, SEED, YZI"],
+  "PENDLEUSDT": ["DEFI, LAUNCHPOOL, RWA, YZI"],
+  "PENGUUSDT": ["LAUNCHPOOL, MEME, NFT, Solana"],
+  "PEOPLEUSDT": ["MEME, SEED"],
+  "PEPEUSDT": ["MEME"],
+  "PERPUSDT": ["DEFI, SEED"],
+  "PHAUSDT": ["AI, INFRASTRUCTURE, POLKADOT, SEED"],
+  "PHBUSDT": ["AI, L1//L2"],
+  "PIXELUSDT": ["GAMING, LAUNCHPOOL, SEED"],
+  "PLUMEUSDT": ["INFRASTRUCTURE, L1//L2, RWA"],
+  "PNUTUSDT": ["MEME, SEED, Solana"],
+  "POLUSDT": ["L1//L2, LAUNCHPAD, YZI"],
+  "POLYXUSDT": ["INFRASTRUCTURE, L1//L2, RWA"],
+  "PONDUSDT": ["AI, INFRASTRUCTURE, SEED"],
+  "PORTALUSDT": ["GAMING, LAUNCHPOOL, SEED"],
+  "PORTOUSDT": ["FAN TOKENS, LAUNCHPAD"],
+  "PROMUSDT": ["NFT, SEED"],
+  "PROVEUSDT": ["INFRASTRUCTURE, SEED"],
+  "PSGUSDT": ["BNB Chain, FAN TOKENS, LAUNCHPOOL, SEED, YZI"],
+  "PUNDIXUSDT": ["PAYMENTS"],
+  "PUMPUSDT": ["SEED"],
+  "PYRUSDT": ["GAMING, METAVERSE, NFT"],
+  "PYTHUSDT": ["INFRASTRUCTURE, Solana, YZI"],
+  "QIUSDT": ["DEFI, LAUNCHPOOL, LIQUID STAKING"],
+  "QKCUSDT": ["L1//L2, POW"],
+  "QNTUSDT": ["INFRASTRUCTURE"],
+  "QTUMUSDT": ["L1//L2"],
+  "QUICKUSDT": ["DEFI"],
+  "RADUSDT": ["INFRASTRUCTURE"],
+  "RAREUSDT": ["NFT"],
+  "RAYUSDT": ["DEFI, Solana"],
+  "RDNTUSDT": ["DEFI, LAUNCHPOOL, SEED"],
+  "REDUSDT": ["INFRASTRUCTURE, LAUNCHPOOL, SEED"],
+  "REIUSDT": ["L1//L2"],
+  "RENDERUSDT": ["INFRASTRUCTURE, Solana"],
+  "RESOLVUSDT": ["DEFI, LAUNCHPOOL, SEED"],
+  "REZUSDT": ["DEFI, LAUNCHPOOL, SEED, YZI"],
+  "RIFUSDT": ["DEFI, L1//L2, POW, STORAGE"],
+  "RLCUSDT": ["AI, INFRASTRUCTURE"],
+  "RONINUSDT": ["GAMING, L1//L2, SEED"],
+  "ROSEUSDT": ["L1//L2"],
+  "RPLUSDT": ["DEFI, LIQUID STAKING, SEED"],
+  "RSRUSDT": ["DEFI, RWA"],
+  "RUNEUSDT": ["DEFI"],
+  "RVNUSDT": ["POW"],
+  "SAGAUSDT": ["L1//L2, LAUNCHPOOL, SEED"],
+  "SAHARAUSDT": ["AI, SEED, YZI"],
+  "SANDUSDT": ["GAMING, LAUNCHPAD, METAVERSE, NFT"],
+  "SANTOSUSDT": ["FAN TOKENS, LAUNCHPOOL"],
+  "SCRTUSDT": ["L1//L2"],
+  "SCRUSDT": ["L1//L2, LAUNCHPOOL, SEED"],
+  "SCUSDT": ["POW, STORAGE"],
+  "SEIUSDT": ["L1//L2, LAUNCHPOOL, YZI"],
+  "SFPUSDT": ["BNB Chain, INFRASTRUCTURE, LAUNCHPAD, YZI"],
+  "SHELLUSDT": ["AI, BNB Chain, LAUNCHPOOL, SEED, YZI"],
+  "SHIBUSDT": ["MEME"],
+  "SIGNUSDT": ["INFRASTRUCTURE, LAUNCHPOOL, SEED, YZI"],
+  "SKLUSDT": ["L1//L2"],
+  "SKYUSDT": ["DEFI, RWA"],
+  "SLPUSDT": ["GAMING, METAVERSE, NFT, SEED"],
+  "SNXUSDT": ["DEFI, RWA"],
+  "SOLUSDT": ["L1//L2"],
+  "SOLVUSDT": ["BNB Chain, DEFI, MEGADROP, SEED, YZI"],
+  "SOMIUSDT": ["L1//L2, SEED"],
+  "SOPHUSDT": ["L1//L2, LAUNCHPOOL, SEED, YZI"],
+  "SPELLUSDT": ["DEFI"],
+  "SPKUSDT": ["DEFI, LAUNCHPOOL, SEED"],
+  "SSVUSDT": ["INFRASTRUCTURE"],
+  "STGUSDT": ["DEFI, SEED"],
+  "STOUSDT": ["DEFI, LAUNCHPOOL, SEED, YZI"],
+  "STORJUSDT": ["STORAGE"],
+  "STRAXUSDT": ["L1//L2"],
+  "STRKUSDT": ["L1//L2"],
+  "STXUSDT": ["L1//L2, POW, STORAGE"],
+  "SUIUSDT": ["L1//L2, LAUNCHPOOL, YZI"],
+  "SUNUSDT": ["DEFI, SEED"],
+  "SUPERUSDT": ["DEFI, NFT, SEED"],
+  "SUSDT": ["L1//L2"],
+  "SUSHIUSDT": ["DEFI"],
+  "SYNUSDT": ["DEFI, SEED"],
+  "SYSUSDT": ["L1//L2, POW"],
+  "SXPUSDT": ["L1//L2"],
+  "SXTUSDT": ["INFRASTRUCTURE, L1//L2, LAUNCHPOOL, SEED"],
+  "SYRUPUSDT": ["DEFI, RWA, SEED"],
+  "TAOUSDT": ["AI, L1//L2"],
+  "THEUSDT": ["BNB Chain, DEFI, LAUNCHPOOL, SEED, YZI"],
+  "THETAUSDT": ["AI, INFRASTRUCTURE, L1//L2"],
+  "TIAUSDT": ["INFRASTRUCTURE, YZI"],
+  "TKOUSDT": ["LAUNCHPAD"],
+  "TLMUSDT": ["BNB Chain, GAMING, LAUNCHPOOL, METAVERSE"],
+  "TNSRUSDT": ["NFT, SEED, Solana"],
+  "TONUSDT": ["L1//L2, LAUNCHPOOL"],
+  "TOWNSUSDT": ["SEED"],
+  "TRBUSDT": ["DEFI, INFRASTRUCTURE, POW, YZI"],
+  "TREEUSDT": ["DEFI, SEED"],
+  "TRUUSDT": ["DEFI, RWA, SEED"],
+  "TRUMPUSDT": ["MEME, SEED"],
+  "TRXUSDT": ["L1//L2"],
+  "TSTUSDT": ["BNB Chain, MEME, SEED"],
+  "TUSDT": ["INFRASTRUCTURE"],
+  "TUTUSDT": ["BNB Chain, MEME, SEED"],
+  "TURBOUSDT": ["AI, MEME, SEED"],
+  "TURTLEUSDT": ["DEFI, SEED"],
+  "TWTUSDT": ["BNB Chain, INFRASTRUCTURE"],
+  "UMAUSDT": ["DEFI"],
+  "UNIUSDT": ["DEFI"],
+  "USUALUSDT": ["DEFI, LAUNCHPOOL, RWA, SEED"],
+  "USTCUSDT": ["DEFI"],
+  "UTKUSDT": ["PAYMENTS"],
+  "VANAUSDT": ["AI, L1//L2, LAUNCHPOOL, SEED, YZI"],
+  "VANRYUSDT": ["AI, L1//L2, SEED"],
+  "VELODROMEUSDT": ["DEFI, SEED"],
+  "VETUSDT": ["L1//L2, RWA"],
+  "VICUSDT": ["L1//L2"],
+  "VIRTUALUSDT": ["AI, SEED"],
+  "VOXELUSDT": ["GAMING, LAUNCHPAD, YZI"],
+  "WALUSDT": ["SEED, STORAGE"],
+  "WANUSDT": ["L1//L2"],
+  "WAXPUSDT": ["DEFI, GAMING, L1//L2, NFT"],
+  "WBETHUSDT": ["LIQUID STAKING"],
+  "WCTUSDT": ["INFRASTRUCTURE, LAUNCHPOOL, SEED"],
+  "WIFUSDT": ["MEME, SEED, Solana"],
+  "WINUSDT": ["INFRASTRUCTURE"],
+  "WLDUSDT": ["AI, INFRASTRUCTURE"],
+  "WLFIUSDT": ["DEFI, SEED"],
+  "WOOUSDT": ["DEFI, YZI"],
+  "WUSDT": ["INFRASTRUCTURE, Solana"],
+  "XAIUSDT": ["GAMING, LAUNCHPOOL, SEED"],
+  "XLMUSDT": ["L1//L2"],
+  "XNOUSDT": ["PAYMENTS"],
+  "XPLUSDT": ["SEED"],
+  "XRPUSDT": ["L1//L2, PAYMENTS"],
+  "XTZUSDT": ["L1//L2"],
+  "XVGUSDT": ["POW"],
+  "XVSUSDT": ["BNB Chain, DEFI, LAUNCHPOOL"],
+  "YBUSDT": ["DEFI, SEED"],
+  "YFIUSDT": ["DEFI"],
+  "YGGUSDT": ["GAMING"],
+  "ZBTUSDT": ["DEFI, SEED"],
+  "ZECUSDT": ["POW"],
+  "ZENUSDT": ["POW"],
+  "ZILUSDT": ["L1//L2, POW"],
+  "ZKCUSDT": ["INFRASTRUCTURE, SEED"],
+  "ZKUSDT": ["INFRASTRUCTURE, L1//L2, YZI"],
+  "ZROUSDT": ["INFRASTRUCTURE, YZI"],
+  "ZRXUSDT": ["DEFI"]
+};
+
+/* ---------- sector taxonomy ---------- */
+const NARRATIVE = new Set(["AI","DEFI","MEME","GAMING","RWA","L1//L2","INFRASTRUCTURE","NFT",
+  "PAYMENTS","STORAGE","POW","METAVERSE","LIQUID STAKING","FAN TOKENS"]);
+
+const COIN_SECTORS = {};
+for (const sym in SECTOR_RAW){
+  COIN_SECTORS[sym] = SECTOR_RAW[sym].join(", ").split(",").map(s=>s.trim()).filter(Boolean);
+}
+
+/* ---------- state ---------- */
+const HOSTS = ["https://api.binance.com","https://data-api.binance.vision"];
+const FLOOR = 250000;          // lowest volume floor we ever fetch history for
+let hostIdx = 0;
+let TICK = null;               // symbol -> {vol, chg}
+let DAILY = {};                // symbol -> [most recent closed day ... 30 days back]
+let SYM = {};                  // symbol -> {w, m}  volume vs week / vs month
+let ROWS = [];
+let loadedAt = null;
+let sortKey = "shareD", sortDir = -1;
+let expanded = null;
+let coinSort = "m", coinDir = -1;
+let busy = false;
+
+const $ = id => document.getElementById(id);
+const sleep = ms => new Promise(r=>setTimeout(r,ms));
+
+/* ---------- data ---------- */
+async function api(path){
+  let err;
+  for (let t=0; t<HOSTS.length*3; t++){
+    const h = HOSTS[(hostIdx+t) % HOSTS.length];
+    try{
+      const r = await fetch(h + path);
+      if (r.status === 429 || r.status === 418){ await sleep(2000); continue; }
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      hostIdx = (hostIdx+t) % HOSTS.length;
+      return await r.json();
+    }catch(e){ err = e; }
+  }
+  throw err || new Error("Network unreachable");
+}
+
+async function pool(items, limit, worker, onProg){
+  let i = 0, done = 0;
+  const n = Math.min(limit, items.length);
+  await Promise.all(Array.from({length:n}, async ()=>{
+    while (i < items.length){
+      const item = items[i++];
+      try{ await worker(item); }catch(e){}
+      onProg(++done, items.length);
+    }
+  }));
+}
+
+function setStatus(html, showBar){
+  $("tbody").innerHTML = '<tr><td colspan="10"><div class="status">' + html +
+    '<div class="prog" style="display:' + (showBar?"block":"none") + '"><i id="pbar"></i></div></div></td></tr>';
+}
+
+async function load(){
+  if (busy) return;
+  busy = true; $("refresh").disabled = true; $("refresh").textContent = "Loading…";
+  $("cards").innerHTML = "";
+  try{
+    setStatus("Pulling 24-hour volume for every Binance pair…", true);
+    const tickers = await api("/api/v3/ticker/24hr");
+    TICK = {};
+    tickers.forEach(t=>{
+      if (!COIN_SECTORS[t.symbol]) return;
+      TICK[t.symbol] = { vol: parseFloat(t.quoteVolume)||0, chg: parseFloat(t.priceChangePercent)||0 };
+    });
+
+    const need = Object.keys(TICK).filter(s => TICK[s].vol >= FLOOR && !DAILY[s]);
+    if (need.length){
+      setStatus("Building week and month baselines for " + need.length + " coins. This is the slow part — about a minute.", true);
+      await pool(need, 10, async sym=>{
+        const k = await api("/api/v3/klines?symbol=" + sym + "&interval=1d&limit=32");
+        if (!Array.isArray(k) || k.length < 4) return;
+        const closed = k.slice(0, k.length-1);                       // drop today's unfinished candle
+        DAILY[sym] = closed.map(c=>parseFloat(c[7])||0).reverse().slice(0,30);
+      }, (d,total)=>{
+        const b = $("pbar"); if (b) b.style.width = (d/total*100).toFixed(1) + "%";
+      });
+    }
+    loadedAt = new Date();
+    refresh();
+  }catch(e){
+    setStatus('<span class="err">Could not reach Binance: ' + (e.message||e) +
+      '</span><br /><br />Check your connection, or your region may be blocking the API. Try again.', false);
+  }finally{
+    busy = false; $("refresh").disabled = false; $("refresh").textContent = "Refresh";
+  }
+}
+
+/* ---------- metrics ---------- */
+const median = a => { const v=a.filter(x=>x>0).sort((x,y)=>x-y); if(!v.length) return 0;
+  const m=v.length>>1; return v.length%2 ? v[m] : (v[m-1]+v[m])/2; };
+
+function compute(){
+  const minVol = +$("minvol").value, minCoins = +$("mincoins").value, incBE = $("btceth").checked;
+
+  const syms = Object.keys(TICK).filter(s=>{
+    if (!incBE && (s === "BTCUSDT" || s === "ETHUSDT")) return false;
+    return TICK[s].vol >= minVol && DAILY[s] && DAILY[s].length >= 7;
+  });
+
+  SYM = {};
+  syms.forEach(s=>{
+    const d = DAILY[s], w = median(d.slice(0,7)), m = median(d.slice(0,30));
+    SYM[s] = { w: w > 0 ? TICK[s].vol/w : null, m: m > 0 ? TICK[s].vol/m : null };
+  });
+
+  const secs = {};
+  syms.forEach(s=>{
+    COIN_SECTORS[s].forEach(name=>{
+      const S = secs[name] || (secs[name] = { name, syms:[], vol:0, pxNum:0, daily:new Array(30).fill(0) });
+      S.syms.push(s); S.vol += TICK[s].vol; S.pxNum += TICK[s].chg * TICK[s].vol;
+      const d = DAILY[s];
+      for (let i=0; i<30 && i<d.length; i++) S.daily[i] += d[i];
+    });
+  });
+
+  let list = Object.values(secs).filter(S=>S.syms.length >= minCoins);
+  const totNow = list.reduce((a,S)=>a+S.vol, 0);
+  const totDay = new Array(30).fill(0);
+  list.forEach(S=>{ for (let i=0;i<30;i++) totDay[i] += S.daily[i]; });
+
+  list.forEach(S=>{
+    const bw = median(S.daily.slice(0,7)), bm = median(S.daily.slice(0,30));
+    S.vsW = bw > 0 ? S.vol/bw : null;
+    S.vsM = bm > 0 ? S.vol/bm : null;
+    S.rvol = S.vsM != null ? S.vsM : S.vsW;
+    S.share = totNow ? S.vol/totNow*100 : 0;
+    let acc = 0, n = 0;
+    for (let i=0; i<7; i++) if (totDay[i] > 0){ acc += S.daily[i]/totDay[i]*100; n++; }
+    S.shareD = n ? S.share - acc/n : 0;
+    const hot = S.syms.filter(s=>SYM[s].m != null && SYM[s].m >= 1.5).length;
+    S.hot = hot;
+    S.breadth = S.syms.length ? hot/S.syms.length*100 : 0;
+    S.px = S.vol ? S.pxNum/S.vol : 0;
+    S.coins = S.syms.length;
+    S.kind = NARRATIVE.has(S.name) ? "narrative" : "ecosystem";
+    S.verdict = verdictOf(S);
+    S.list = S.syms.map(s=>({ s, w:SYM[s].w, m:SYM[s].m, chg:TICK[s].chg, vol:TICK[s].vol,
+                              sh: S.vol ? TICK[s].vol/S.vol*100 : 0 }));
+  });
+  ROWS = list;
+}
+
+function verdictOf(S){
+  const r = S.rvol || 0;
+  if (r >= 1.35 && S.breadth < 25)                    return ["One coin only","c-one"];
+  if (r >= 1.35 && S.shareD > 0.2 && S.px > 0.3)      return ["Money coming in","c-in"];
+  if (r >= 1.35 && S.px < -0.3)                       return ["Heavy selling","c-out"];
+  if (r >= 1.35)                                      return ["Busy, no direction","c-mix"];
+  if (r <= 0.7)                                       return ["Drying up","c-quiet"];
+  return ["Normal","c-quiet"];
+}
+
+/* ---------- formatting ---------- */
+const usd = v => v >= 1e9 ? "$" + (v/1e9).toFixed(2) + "B"
+              : v >= 1e6 ? "$" + (v/1e6).toFixed(1) + "M"
+              : v >= 1e3 ? "$" + (v/1e3).toFixed(0) + "K" : "$" + v.toFixed(0);
+const sgn = (v,d) => (v>0?"+":"") + v.toFixed(d===undefined?2:d);
+const cls = v => v > 0.05 ? "pos" : v < -0.05 ? "neg" : "neu";
+const esc = s => String(s).replace(/[&<>"]/g, c=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
+const mult = v => v == null ? "—" : v.toFixed(2) + "×";
+const mcls = v => v == null ? "" : v >= 1.5 ? "pos" : v <= 0.7 ? "neg" : "";
+
+/* ---------- render ---------- */
+const COLS = [
+  { k:"name",    t:"Sector" },
+  { k:"vol",     t:"24h volume" },
+  { k:"vsW",     t:"Vs week" },
+  { k:"vsM",     t:"Vs month" },
+  { k:"share",   t:"Share now" },
+  { k:"shareD",  t:"Share change" },
+  { k:"breadth", t:"Participation" },
+  { k:"px",      t:"Price 24h" },
+  { k:"coins",   t:"Coins" },
+  { k:"verdict", t:"Read" }
+];
+
+function visible(){
+  const view = document.querySelector("#viewseg .on").dataset.view;
+  const q = $("search").value.trim().toLowerCase();
+  return ROWS.filter(S=>(view === "all" || S.kind === view) && (!q || S.name.toLowerCase().includes(q)));
+}
+
+function refresh(){
+  if (!TICK) return;
+  compute();
+  const rows = visible().slice().sort((a,b)=>{
+    const k = sortKey === "verdict" ? "rvol" : sortKey;
+    if (k === "name") return a.name.localeCompare(b.name) * sortDir;
+    return ((a[k] ?? -1e18) - (b[k] ?? -1e18)) * sortDir;
+  });
+  renderHead(); renderCards(); renderTable(rows);
+  const cov = new Set(); ROWS.forEach(S=>S.syms.forEach(s=>cov.add(s)));
+  $("stamp").innerHTML = "Updated " + loadedAt.toLocaleTimeString() + "<br />" +
+    cov.size + " coins · " + ROWS.length + " sectors";
+}
+
+function renderHead(){
+  $("hrow").innerHTML = COLS.map(c=>{
+    const on = c.k === sortKey ? ' <span class="ar">' + (sortDir<0?"▼":"▲") + "</span>" : "";
+    return '<th data-k="' + c.k + '">' + c.t + on + "</th>";
+  }).join("");
+  $("hrow").querySelectorAll("th").forEach(th=>{
+    th.onclick = ()=>{
+      const k = th.dataset.k;
+      if (k === sortKey) sortDir *= -1; else { sortKey = k; sortDir = k === "name" ? 1 : -1; }
+      refresh();
+    };
+  });
+}
+
+function card(eyebrow, big, val, why, color){
+  return '<div class="card panel" style="--c:' + color + '"><div class="eyebrow">' + eyebrow +
+    '</div><div class="big">' + esc(big) + '</div><div class="val">' + val +
+    '</div><div class="why">' + why + "</div></div>";
+}
+
+function renderCards(){
+  const v = visible();
+  if (!v.length){ $("cards").innerHTML = ""; return; }
+  const by = k => v.slice().sort((a,b)=>(b[k] ?? -1e18) - (a[k] ?? -1e18));
+  const hot = by("vsM")[0], gain = by("shareD")[0], wide = by("breadth")[0];
+  const loss = v.slice().sort((a,b)=>(a.shareD ?? 0) - (b.shareD ?? 0))[0];
+  let out = "";
+  if (hot)  out += card("Busiest vs its own normal", hot.name,
+    mult(hot.vsW) + " vs week · " + mult(hot.vsM) + " vs month",
+    (hot.vsW != null && hot.vsM != null && hot.vsW < 1.15 && hot.vsM >= 1.4)
+      ? "Already elevated all week, so today is not fresh news. Late-stage move."
+      : "Trading well above what this sector normally does in a day.", "var(--blue)");
+  if (gain) out += card("Taking the most share", gain.name, sgn(gain.shareD) + " points of volume share",
+    "Its slice of altcoin volume grew versus its 7-day average — money moving in from somewhere else.", "var(--green)");
+  if (wide) out += card("Widest participation", wide.name, wide.breadth.toFixed(0) + "% of coins busy",
+    wide.hot + " of " + wide.coins + " coins are individually above 1.5× their monthly normal. Broad moves last longer than single-coin spikes.", "var(--amber)");
+  if (loss) out += card("Bleeding attention", loss.name, sgn(loss.shareD) + " points of volume share",
+    "Losing its slice of volume. If you are holding here, the crowd has moved on.", "var(--red)");
+  $("cards").innerHTML = out;
+}
+
+const CCOLS = [
+  { k:"s",   t:"Coin" },
+  { k:"vol", t:"24h volume" },
+  { k:"sh",  t:"% of sector" },
+  { k:"w",   t:"Vs week" },
+  { k:"m",   t:"Vs month" },
+  { k:"chg", t:"Price 24h" }
+];
+
+function coinTable(S){
+  const rows = S.list.slice().sort((a,b)=>{
+    if (coinSort === "s") return a.s.localeCompare(b.s) * coinDir;
+    return ((a[coinSort] ?? -1e18) - (b[coinSort] ?? -1e18)) * coinDir;
+  });
+  const head = CCOLS.map(c=>{
+    const on = c.k === coinSort ? ' <span class="ar">' + (coinDir<0?"▼":"▲") + "</span>" : "";
+    return '<th data-c="' + c.k + '">' + c.t + on + "</th>";
+  }).join("");
+  const body = rows.map(c=>{
+    const dot = c.m != null && c.m >= 1.5 ? "var(--green)" : c.m != null && c.m <= 0.7 ? "var(--red)" : "var(--dim)";
+    return '<tr><td class="cn"><span class="dot" style="background:' + dot + '"></span>' +
+      esc(c.s.replace(/USDT$/,"")) + "</td>" +
+      "<td>" + usd(c.vol) + "</td>" +
+      '<td class="neu">' + c.sh.toFixed(1) + "%</td>" +
+      '<td class="' + mcls(c.w) + '">' + mult(c.w) + "</td>" +
+      '<td class="' + mcls(c.m) + '">' + mult(c.m) + "</td>" +
+      '<td class="' + cls(c.chg) + '">' + sgn(c.chg,1) + "%</td></tr>";
+  }).join("");
+  return '<tr class="expand"><td colspan="10">' +
+    '<div class="exphead"><span class="t">All ' + S.coins + " coins in " + esc(S.name) + "</span>" +
+    '<span class="n">' + S.hot + " busy (1.5×+ vs month) · " + usd(S.vol) + " total · click a heading to sort</span></div>" +
+    '<div class="expscroll"><table class="mini"><thead><tr>' + head + "</tr></thead><tbody>" + body +
+    "</tbody></table></div></td></tr>";
+}
+
+function renderTable(rows){
+  if (!rows.length){ setStatus("Nothing matches these filters. Try lowering the volume floor or the minimum coin count.", false); return; }
+  const maxR = Math.max(1.6, ...rows.map(r=>r.vsM||0));
+  const maxD = Math.max(0.4, ...rows.map(r=>Math.abs(r.shareD||0)));
+  let h = "";
+  rows.forEach(S=>{
+    const rp = Math.min(100, (S.vsM||0)/maxR*100);
+    const dp = Math.min(50, Math.abs(S.shareD)/maxD*50);
+    const up = S.shareD >= 0;
+    h += '<tr data-n="' + esc(S.name) + '">' +
+      '<td><span class="sname">' + esc(S.name) + "</span></td>" +
+      "<td>" + usd(S.vol) + "</td>" +
+      '<td class="' + mcls(S.vsW) + '">' + mult(S.vsW) + "</td>" +
+      '<td><span class="' + mcls(S.vsM) + '">' + mult(S.vsM) +
+        '</span><div class="bar"><i style="width:' + rp + '%;--bc:' +
+        (S.vsM>=1.35?"var(--green)":S.vsM<=0.7?"var(--red)":"var(--blue)") + '"></i></div></td>' +
+      "<td>" + S.share.toFixed(2) + "%</td>" +
+      '<td><span class="' + cls(S.shareD) + '">' + sgn(S.shareD) + '</span><div class="dvg"><u></u><i style="' +
+        (up ? "left:50%;width:" + dp + "%;background:var(--green)" : "right:50%;width:" + dp + "%;background:var(--red)") + '"></i></div></td>' +
+      "<td>" + S.breadth.toFixed(0) + '%<div class="bar"><i style="width:' + S.breadth + '%;--bc:var(--amber)"></i></div></td>' +
+      '<td class="' + cls(S.px) + '">' + sgn(S.px) + "%</td>" +
+      '<td class="neu">' + S.coins + "</td>" +
+      '<td><span class="chip ' + S.verdict[1] + '">' + S.verdict[0] + "</span></td></tr>";
+    if (expanded === S.name) h += coinTable(S);
+  });
+  $("tbody").innerHTML = h;
+  $("tbody").querySelectorAll("tr[data-n]").forEach(tr=>{
+    tr.onclick = ()=>{ expanded = expanded === tr.dataset.n ? null : tr.dataset.n; refresh(); };
+  });
+  $("tbody").querySelectorAll("th[data-c]").forEach(th=>{
+    th.onclick = e=>{
+      e.stopPropagation();
+      const k = th.dataset.c;
+      if (k === coinSort) coinDir *= -1; else { coinSort = k; coinDir = k === "s" ? 1 : -1; }
+      refresh();
+    };
+  });
+}
+
+/* ---------- csv ---------- */
+$("csv").onclick = ()=>{
+  if (!ROWS.length) return;
+  const rows = visible();
+  let head, body, tag;
+  if (expanded && rows.some(S=>S.name === expanded)){
+    const S = rows.find(x=>x.name === expanded);
+    tag = expanded.replace(/[^A-Za-z0-9]+/g,"-").toLowerCase();
+    head = ["Coin","Sector","24h volume USD","% of sector","Vs week","Vs month","Price 24h %"];
+    body = S.list.slice().sort((a,b)=>(b.m||0)-(a.m||0))
+      .map(c=>[c.s, S.name, c.vol.toFixed(0), c.sh.toFixed(2), (c.w||0).toFixed(3), (c.m||0).toFixed(3), c.chg.toFixed(2)]);
+  } else {
+    tag = "sectors";
+    head = ["Sector","24h volume USD","Vs week","Vs month","Share now %","Share change pp","Participation %","Busy coins","Coins","Price 24h %","Read"];
+    body = rows.map(S=>[S.name, S.vol.toFixed(0), (S.vsW||0).toFixed(3), (S.vsM||0).toFixed(3),
+      S.share.toFixed(3), S.shareD.toFixed(3), S.breadth.toFixed(1), S.hot, S.coins, S.px.toFixed(2), S.verdict[0]]);
+  }
+  const csv = [head, ...body].map(r=>r.map(x=>'"' + String(x).replace(/"/g,'""') + '"').join(",")).join("\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv], { type:"text/csv" }));
+  a.download = "sector-flow-" + tag + "-" + new Date().toISOString().slice(0,10) + ".csv";
+  a.click(); URL.revokeObjectURL(a.href);
+};
+
+/* ---------- wiring ---------- */
+$("refresh").onclick = load;
+$("viewseg").onclick = e=>{
+  const b = e.target.closest("button"); if (!b) return;
+  $("viewseg").querySelectorAll("button").forEach(x=>x.classList.toggle("on", x === b));
+  expanded = null; refresh();
+};
+["minvol","mincoins","btceth"].forEach(id=>$(id).onchange = ()=>{ expanded = null; refresh(); });
+$("search").oninput = ()=>refresh();
+</script>
+</body>
+</html>
